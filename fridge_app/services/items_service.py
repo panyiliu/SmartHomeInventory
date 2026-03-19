@@ -130,18 +130,6 @@ def list_items(
     return items, categories, locations, location_pills, category_pills
 
 
-def adjust_quantity(item: Item, delta: float) -> Item:
-    new_qty = item.quantity + delta
-    if new_qty < 0:
-        new_qty = 0.0
-    item.quantity = new_qty
-    if item.quantity > 0:
-        item.used_up = False
-    item.touch()
-    db.session.commit()
-    return item
-
-
 def mark_used_up(item: Item) -> Item:
     item.used_up = True
     item.touch()

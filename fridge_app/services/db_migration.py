@@ -21,12 +21,8 @@ def ensure_schema(db: SQLAlchemy) -> None:
         )
     if "shelf_life_days" not in cols:
         db.session.execute(db.text("ALTER TABLE items ADD COLUMN shelf_life_days INTEGER"))
-    if "archived" not in cols:
-        db.session.execute(db.text("ALTER TABLE items ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
     if "used_up" not in cols:
         db.session.execute(db.text("ALTER TABLE items ADD COLUMN used_up BOOLEAN NOT NULL DEFAULT 0"))
-    if "quick_step" not in cols:
-        db.session.execute(db.text("ALTER TABLE items ADD COLUMN quick_step FLOAT"))
     if "barcode" not in cols:
         db.session.execute(db.text("ALTER TABLE items ADD COLUMN barcode VARCHAR(64)"))
     if "deleted_at" not in cols:

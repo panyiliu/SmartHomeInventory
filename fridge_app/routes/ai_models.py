@@ -13,7 +13,7 @@ import requests
 from ..extensions import db
 from ..models import AiModel, AiPromptTemplate
 from ..services.settings_service import get_secret_setting
-from ..utils.ark_config import build_ark_endpoint
+from ..utils.ai_engine_runtime import _build_ark_endpoint
 from ..utils.ai_parse import extract_json, extract_output_text
 from ..utils.auth import admin_required
 
@@ -402,7 +402,7 @@ def ai_models_test(model_id: int):
         except Exception:
             headers_extra = {}
 
-        endpoint = build_ark_endpoint({"base_url": row.base_url, "api_type": row.api_type})
+        endpoint = _build_ark_endpoint(base_url=row.base_url, api_type=row.api_type)
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         for k, v in headers_extra.items():

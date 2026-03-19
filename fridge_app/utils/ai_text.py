@@ -9,8 +9,6 @@ from typing import Any
 import requests
 
 
-from .ark_config import build_ark_endpoint, get_active_ark_profile_for, get_timeout_seconds, merged_request_params
-from .ai_parse import extract_json as ark_extract_json, extract_output_text as ark_extract_output_text
 from .prompt_templates import get_prompt_content
 from ..services.settings_service import get_category_options, get_location_options
 from .ai_engine_runtime import text_extract_with_engine
@@ -149,110 +147,9 @@ def extract_items_from_text(text: str) -> list[dict[str, Any]]:
             )
         return out
 
-    profile = get_active_ark_profile_for("text_extract")
-    endpoint = build_ark_endpoint(profile)
-    model = str(profile.get("model") or "")
-    api_type = str(profile.get("api_type") or "responses").strip()
-    base_url = str(profile.get("base_url") or "")
-    if api_type not in {"responses", "chat_completions"}:
-        raise RuntimeError(f"[AI] text_extract 仅支持 responses/chat_completions，当前 api_type={api_type}")
-    text_prompt = str(profile.get("text_prompt") or text_prompt)
-    extra_params = merged_request_params(profile)
-    for k in ["model", "input", "messages"]:
-        extra_params.pop(k, None)
-
+    # No legacy ark_profiles fallback: self-host version uses AiModel engines only.
     api_key = get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY")
     if not api_key:
-        raise RuntimeError("VOLCENGINE_API_KEY missing (set env var or save it in 设置页)")
-
-    verbose = _env_on("AI_LOG_VERBOSE", default="1")
-    full_response = _env_on("AI_LOG_FULL_RESPONSE", default="1")
-
-    user_tail = f"用户输入：{text}"
-    if api_type == "chat_completions":
-        full_prompt = f"{text_prompt}\n\n{user_tail}"
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": full_prompt,
-                }
-            ],
-        }
-    else:
-        payload = {
-            "model": model,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": text_prompt},
-                        {"type": "input_text", "text": user_tail},
-                    ],
-                }
-            ],
-        }
-
-    if extra_params:
-        payload.update(extra_params)
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    start = time.time()
-    timeout_s = get_timeout_seconds(profile, default=60)
-    resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout_s)
-    cost_ms = int((time.time() - start) * 1000)
-
-    if verbose:
-        print("=" * 80)
-        print("[AI] Text parse response")
-        print("status:", resp.status_code, "cost_ms:", cost_ms)
-        try:
-            body = resp.json()
-            if full_response:
-                print(json.dumps(body, ensure_ascii=False, indent=2))
-            else:
-                print(json.dumps(body, ensure_ascii=False))
-        except Exception:
-            print(resp.text or "")
-        print("=" * 80)
-
-    resp.raise_for_status()
-    data = resp.json()
-
-    out_text = ark_extract_output_text(data)
-    items_any = ark_extract_json(out_text)
-    if not isinstance(items_any, list):
-        return []
-
-    allowed_categories = get_category_options()
-    if "其他" not in allowed_categories:
-        allowed_categories.append("其他")
-    allowed_locations = get_location_options()
-
-    out: list[dict[str, Any]] = []
-    for it in items_any:
-        if not isinstance(it, dict):
-            continue
-        name = str(it.get("name") or "").strip()
-        if not name:
-            continue
-        number = _safe_int(it.get("number", 1), default=1)
-        category = str(it.get("category") or "其他").strip() or "其他"
-        if category not in allowed_categories:
-            category = "其他"
-        location = str(it.get("location") or "").strip()
-        if location and location not in allowed_locations:
-            location = ""
-        status = str(it.get("status") or "").strip()
-        out.append(
-            {
-                "name": name[:80],
-                "quantity": max(0, number),
-                "category": category,
-                "location": location[:40],
-                "status": status[:40],
-            }
-        )
-    return out
+        raise RuntimeError("AI 未配置：请设置环境变量 VOLCENGINE_API_KEY，然后在「设置 → AI 设置」选择引擎。")
+    raise RuntimeError("未配置文本解析引擎：请在「设置 → AI 设置 → 按能力选择引擎」选择“文本解析”引擎。")
 

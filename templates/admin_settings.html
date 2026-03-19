@@ -213,21 +213,21 @@
                       {% if engine_vision %}
                         <code>{{ engine_vision.display_name or engine_vision.name }}</code>（{{ engine_vision.api_type }} / {{ engine_vision.model_name }}）
                       {% else %}
-                        <code>{{ ark_vision_active_profile_name }}</code>（{{ ark_vision_active_api_type }} / {{ ark_vision_active_model }}）
+                        <span class="text-warning fw-semibold">未指定引擎</span>
                       {% endif %}
                       <br/>
                       text：
                       {% if engine_text %}
                         <code>{{ engine_text.display_name or engine_text.name }}</code>（{{ engine_text.api_type }} / {{ engine_text.model_name }}）
                       {% else %}
-                        <code>{{ ark_text_active_profile_name }}</code>（{{ ark_text_active_api_type }} / {{ ark_text_active_model }}）
+                        <span class="text-warning fw-semibold">未指定引擎</span>
                       {% endif %}
                       <br/>
                       recipes：
                       {% if engine_recipes %}
                         <code>{{ engine_recipes.display_name or engine_recipes.name }}</code>（{{ engine_recipes.api_type }} / {{ engine_recipes.model_name }}）
                       {% else %}
-                        <code>{{ ark_recipes_active_profile_name }}</code>（{{ ark_recipes_active_api_type }} / {{ ark_recipes_active_model }}）
+                        <span class="text-warning fw-semibold">未指定引擎</span>
                       {% endif %}
                     </div>
 

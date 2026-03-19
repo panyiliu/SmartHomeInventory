@@ -21,9 +21,7 @@ class Item(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     shelf_life_days = db.Column(db.Integer, nullable=True)
-    archived = db.Column(db.Boolean, nullable=False, default=False)
     used_up = db.Column(db.Boolean, nullable=False, default=False)
-    quick_step = db.Column(db.Float, nullable=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     __table_args__ = (CheckConstraint("quantity >= 0", name="ck_items_quantity_nonnegative"),)

@@ -26,9 +26,7 @@
         <div class="col-6 col-md-3">
           <label class="form-label">数量<span class="req">*</span></label>
           <div class="input-group">
-            <button class="btn btn-outline-secondary" type="button" id="qtyMinusBtn"><i class="bi bi-dash-lg"></i></button>
             <input class="form-control mono text-center" type="number" inputmode="decimal" step="0.01" min="0" name="quantity" id="quantityInput" required value="{{ item.quantity }}" />
-            <button class="btn btn-outline-secondary" type="button" id="qtyPlusBtn"><i class="bi bi-plus-lg"></i></button>
           </div>
         </div>
         <div class="col-6 col-md-3">
@@ -144,34 +142,7 @@
     })();
   </script>
 
-  <script>
-    // 数量加减按钮逻辑（编辑页）
-    (function () {
-      const qtyInput = document.getElementById("quantityInput");
-      const minusBtn = document.getElementById("qtyMinusBtn");
-      const plusBtn = document.getElementById("qtyPlusBtn");
-      if (!qtyInput || !minusBtn || !plusBtn) return;
-
-      function parseVal() {
-        const v = parseFloat(qtyInput.value || "0");
-        return isNaN(v) ? 0 : v;
-      }
-
-      const STEP = 1;
-
-      minusBtn.addEventListener("click", () => {
-        let v = parseVal();
-        v = Math.max(0, v - STEP);
-        qtyInput.value = v.toString();
-      });
-
-      plusBtn.addEventListener("click", () => {
-        let v = parseVal();
-        v = v + STEP;
-        qtyInput.value = v.toString();
-      });
-    })();
-  </script>
+  {# 数量加减按钮已移除（编辑页简化） #}
 
   <script>
     // Mobile pills for category/location (sync to hidden inputs + desktop selects)

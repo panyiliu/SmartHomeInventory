@@ -246,51 +246,7 @@ def settings_save_security():
 @bp.post("/settings/ai")
 @admin_required
 def settings_save_ai():
-    vision_active = (request.form.get("ark_active_profile_vision") or request.form.get("ark_active_profile") or "default").strip()
-    text_active = (request.form.get("ark_active_profile_text") or request.form.get("ark_active_profile") or "default").strip()
-    recipes_active = (request.form.get("ark_active_profile_recipes") or request.form.get("ark_active_profile") or "default").strip()
-    image_gen_active = (request.form.get("ark_active_profile_image_generation") or "default").strip()
-    video_task_active = (request.form.get("ark_active_profile_video_task") or "default").strip()
-    raw_profiles = (request.form.get("ark_profiles_json") or "").strip()
-
-    if not raw_profiles:
-        # Reset to defaults (keep active selection as-is)
-        set_setting("ark_profiles", "")
-        set_setting("ark_active_profile", vision_active)
-        set_setting("ark_active_profile_vision", vision_active)
-        set_setting("ark_active_profile_text", text_active)
-        set_setting("ark_active_profile_recipes", recipes_active)
-        set_setting("ark_active_profile_image_generation", image_gen_active)
-        set_setting("ark_active_profile_video_task", video_task_active)
-        flash("AI 配置已重置为默认值（激活项已按你选择保存）。", "success")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
-
-    try:
-        parsed = json.loads(raw_profiles)
-    except Exception:
-        flash("保存失败：AI 配置 JSON 解析失败。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
-
-    if not isinstance(parsed, list):
-        flash("保存失败：AI 配置 JSON 必须是一个数组（list）。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
-
-    normalized: list[dict[str, Any]] = []
-    for item in parsed:
-        if not isinstance(item, dict):
-            continue
-        normalized.append(item)
-
-    set_setting("ark_profiles", json.dumps(normalized, ensure_ascii=False))
-    # legacy global active
-    set_setting("ark_active_profile", vision_active)
-    # capability-specific active
-    set_setting("ark_active_profile_vision", vision_active)
-    set_setting("ark_active_profile_text", text_active)
-    set_setting("ark_active_profile_recipes", recipes_active)
-    set_setting("ark_active_profile_image_generation", image_gen_active)
-    set_setting("ark_active_profile_video_task", video_task_active)
-    flash("AI 配置已保存。", "success")
+    flash("该配置已废弃：请使用下方「按能力选择引擎（推荐）」并保存。", "warning")
     return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
 
 

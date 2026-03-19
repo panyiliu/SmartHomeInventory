@@ -4,7 +4,7 @@
 - Docker 运行（Gunicorn）
 - Nginx 负责 HTTPS（自签证书，局域网）
 - SQLite 持久化（`instance/fridge.db`）
-- 更新/回滚靠“覆盖代码 + 重建镜像”
+- 更新/回滚靠 Git 拉取 + 重建镜像
 - 备份/恢复靠备份 SQLite 文件
 
 ---
@@ -38,22 +38,13 @@ sudo usermod -aG docker $USER
 
 ---
 
-## 2) 上传项目到服务器（你没有 Git 仓库）
+## 2) 拉取项目到服务器（推荐 Git）
 
-把你本机项目文件夹**整体上传**到服务器目录，例如：
-
+```bash
+cd /home/ethan/docker
+git clone <你的仓库地址> xiaocangwu
+cd xiaocangwu
 ```
-/home/ethan/docker/xiaocangwu/
-  docker-compose.yml
-  Dockerfile
-  fridge_app/
-  templates/
-  requirements.txt
-  ops/
-  ...
-```
-
-建议用 WinSCP（Windows）或 scp/rsync。
 
 ---
 
@@ -111,7 +102,7 @@ SQLite 会在：`instance/fridge.db`
 
 ---
 
-## 6) 更新（无 Git）
+## 6) 更新（Git）
 
 流程（最稳）：
 
@@ -121,7 +112,10 @@ cd /home/ethan/docker/xiaocangwu
 bash ops/backup_sqlite.sh
 ```
 
-2) 用 WinSCP/rsync 覆盖上传新代码（不要覆盖 `instance/`）
+2) 拉取新代码
+```bash
+git pull --rebase
+```
 
 3) 重建并重启
 ```bash
@@ -135,8 +129,8 @@ docker compose up -d --build
 你有两种回滚：
 
 ### 7.1 回滚代码
-- 把你上一个版本的代码目录覆盖回去
-- `docker compose up -d --build`
+- 切回到上一个 commit 或 tag，然后重建：
+- `git checkout <commit或tag> && docker compose up -d --build`
 
 ### 7.2 回滚数据（SQLite）
 - 用备份恢复：

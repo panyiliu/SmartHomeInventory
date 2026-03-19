@@ -9,8 +9,28 @@ import requests
 
 from ..models import AiModel
 from ..services.settings_service import get_secret_setting, get_setting
-from .ark_config import build_ark_endpoint
 from .ai_parse import extract_json, extract_output_text
+def _build_ark_endpoint(*, base_url: str, api_type: str) -> str:
+    """
+    Build Volcengine Ark endpoint URL from base_url + api_type.
+    Supported api_type:
+      - responses
+      - chat_completions
+      - images_generations
+      - contents_generations_tasks
+    """
+    base = (base_url or "").strip().rstrip("/")
+    t = (api_type or "responses").strip().lower()
+    if "/api/v3/responses" in base or "/api/v3/chat/completions" in base or "/api/v3/images/generations" in base or "/api/v3/contents/generations/tasks" in base:
+        return base
+    if t in {"chat_completions", "chatcompletions", "chat-completions", "chat"}:
+        return f"{base}/api/v3/chat/completions"
+    if t in {"images_generations", "imagesgenerations", "image_generation", "image"}:
+        return f"{base}/api/v3/images/generations"
+    if t in {"contents_generations_tasks", "contentsgenerationstasks", "video_task", "video"}:
+        return f"{base}/api/v3/contents/generations/tasks"
+    return f"{base}/api/v3/responses"
+
 
 
 def _deep_replace(value: Any, mapping: dict[str, str]) -> Any:
@@ -81,7 +101,7 @@ def _call_engine(
 
     payload = _deep_replace(payload_template, {"{{model}}": engine.model_name, **mapping})
 
-    endpoint = build_ark_endpoint({"base_url": engine.base_url, "api_type": engine.api_type})
+    endpoint = _build_ark_endpoint(base_url=engine.base_url, api_type=engine.api_type)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     if force_non_stream:

@@ -10,7 +10,7 @@ from flask import Blueprint, flash, jsonify, redirect, request, url_for
 from ..extensions import db
 from ..models import Item
 from ..services.barcode_service import barcode_lookup
-from ..services.items_service import adjust_quantity, mark_used_up, use_up
+from ..services.items_service import mark_used_up, use_up
 from ..services.settings_service import safe_int
 from ..utils.ai_image import recognize_foods_from_image
 from ..utils.ai_text import extract_items_from_text
@@ -18,25 +18,6 @@ from ..utils.auth import admin_required
 
 
 bp = Blueprint("items", __name__)
-
-
-@bp.post("/item/<int:item_id>/adjust")
-def adjust(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    try:
-        delta = float((request.form.get("delta") or "0").strip())
-    except ValueError:
-        flash("调整数量失败：delta 不是数字。", "danger")
-        return redirect(request.referrer or url_for("main.index"))
-
-    item = adjust_quantity(item, delta=delta)
-    wants_json = (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or request.accept_mimetypes.best == "application/json"
-    )
-    if wants_json:
-        return jsonify({"ok": True, "item_id": item.id, "quantity": item.quantity, "used_up": bool(item.used_up)})
-    return redirect(request.referrer or url_for("main.index"))
 
 
 @bp.post("/item/<int:item_id>/mark-used-up")
@@ -106,7 +87,6 @@ def api_suggest():
                 "category": r.category,
                 "unit": r.unit,
                 "location": r.location,
-                "quick_step": r.quick_step,
                 "shelf_life_days": r.shelf_life_days,
             }
             for r in rows

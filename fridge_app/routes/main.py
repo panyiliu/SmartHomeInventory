@@ -129,7 +129,6 @@ def add():
                 location=location,
                 note=note,
                 shelf_life_days=shelf_life_days,
-                quick_step=None,
             )
             item.created_at = created_at
             item.touch()
@@ -169,7 +168,6 @@ def edit(item_id: int):
         location = (request.form.get("location") or "冰箱").strip() or "冰箱"
         note = (request.form.get("note") or "").strip()
         shelf_life_raw = (request.form.get("shelf_life_days") or "").strip()
-        quick_step_raw = (request.form.get("quick_step") or "").strip()
         record_date_raw = (request.form.get("record_date") or "").strip()
 
         shelf_life_days: int | None
@@ -193,24 +191,6 @@ def edit(item_id: int):
         elif shelf_life_days is not None and shelf_life_days < 0:
             flash("保质期必须是一个不小于 0 的整数（天），或留空。", "danger")
         else:
-            quick_step: float | None
-            if not quick_step_raw:
-                quick_step = None
-            else:
-                try:
-                    quick_step = float(quick_step_raw)
-                except ValueError:
-                    quick_step = -1
-
-            if quick_step is not None and quick_step <= 0:
-                flash("快捷步长必须是一个大于 0 的数字，或留空。", "danger")
-                return render_template(
-                    "edit.html",
-                    item=item,
-                    category_options=category_opts,
-                    location_options=location_opts,
-                )
-
             if record_date_raw:
                 try:
                     rec_date = datetime.strptime(record_date_raw, "%Y-%m-%d").date()
@@ -227,7 +207,6 @@ def edit(item_id: int):
             item.location = location
             item.note = note
             item.shelf_life_days = shelf_life_days
-            item.quick_step = quick_step
             item.touch()
             db.session.commit()
             flash("已保存修改。", "success")

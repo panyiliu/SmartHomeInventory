@@ -1,23 +1,13 @@
 from __future__ import annotations
 
-import base64
 import os
 import time
 from dataclasses import dataclass
 from typing import Any
 
-import requests
-
-
-from .ark_config import (
-    build_ark_endpoint,
-    get_active_ark_profile_for,
-    get_timeout_seconds,
-    merged_request_params,
-)
 from .prompt_templates import get_prompt_content
 from .ai_engine_runtime import vision_recognize_with_engine
-from .ai_parse import extract_json, extract_output_text
+
 ALLOWED_TYPES = ["调味品", "食材", "蔬菜", "水果", "饮品", "零食", "日用品", "其他"]
 
 FIXED_PROMPT = """
@@ -110,83 +100,8 @@ def call_ark_vision(image_bytes: bytes) -> Any:
     if engine_out is not None:
         return engine_out
 
-    profile = get_active_ark_profile_for("vision_recognize")
-    endpoint = build_ark_endpoint(profile)
-    model = str(profile.get("model") or "")
-    api_type = str(profile.get("api_type") or "responses").strip()
-    base_url = str(profile.get("base_url") or "")
-    if api_type not in {"responses", "chat_completions"}:
-        raise RuntimeError(f"[AI] vision_recognize 仅支持 responses/chat_completions，当前 api_type={api_type}")
-    vision_prompt = str(profile.get("vision_prompt") or vision_prompt)
-    extra_params = merged_request_params(profile)
-    # Never allow overriding core fields accidentally.
-    for k in ["model", "input", "messages"]:
-        extra_params.pop(k, None)
-
     api_key = get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY")
     if not api_key:
-        raise RuntimeError("VOLCENGINE_API_KEY missing (set env var or save it in 设置页)")
-
-    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-    image_data_url = f"data:image/jpeg;base64,{image_b64}"
-
-    if api_type == "chat_completions":
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": image_data_url},
-                        },
-                        {"type": "text", "text": vision_prompt},
-                    ],
-                }
-            ],
-        }
-    else:
-        payload = {
-            "model": model,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_image", "image_url": image_data_url},
-                        {"type": "input_text", "text": vision_prompt},
-                    ],
-                }
-            ],
-        }
-
-    if extra_params:
-        payload.update(extra_params)
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    verbose = _env_on("AI_LOG_VERBOSE", default="1")
-    full_response = _env_on("AI_LOG_FULL_RESPONSE", default="1")
-    timeout_s = get_timeout_seconds(profile, default=60)
-    start = time.time()
-    resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout_s)
-    cost_ms = int((time.time() - start) * 1000)
-
-    if verbose:
-        print("=" * 80)
-        print("[AI] Ark vision response")
-        print("status:", resp.status_code, "cost_ms:", cost_ms)
-        try:
-            body = resp.json()
-            if full_response:
-                print(json.dumps(body, ensure_ascii=False, indent=2))
-            else:
-                print(json.dumps(body, ensure_ascii=False))
-        except Exception:
-            print(resp.text or "")
-        print("=" * 80)
-
-    resp.raise_for_status()
-    data = resp.json()
-    out_text = extract_output_text(data)
-    return extract_json(out_text) if out_text else {}
+        raise RuntimeError("AI 未配置：请设置环境变量 VOLCENGINE_API_KEY，然后在「设置 → AI 设置」选择引擎。")
+    raise RuntimeError("未配置图片识别引擎：请在「设置 → AI 设置 → 按能力选择引擎」选择“图片识别”引擎。")
 

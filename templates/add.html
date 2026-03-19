@@ -119,11 +119,9 @@
             <div class="col-6 col-md-3">
               <label class="form-label">数量<span class="req">*</span></label>
               <div class="input-group">
-                <button class="btn btn-outline-secondary" type="button" id="qtyMinusBtn"><i class="bi bi-dash-lg"></i></button>
                 <input class="form-control mono text-center" type="number" inputmode="decimal" step="0.5" min="0" name="quantity" id="quantityInput" required value="1" />
-                <button class="btn btn-outline-secondary" type="button" id="qtyPlusBtn"><i class="bi bi-plus-lg"></i></button>
               </div>
-              <div class="form-text">支持小数（例如 0.5）；可点击左右按钮调整。</div>
+              <div class="form-text">支持小数（例如 0.5）。</div>
             </div>
             <div class="col-6 col-md-3">
               <label class="form-label text-muted">单位</label>
@@ -463,15 +461,7 @@
           if (hit) fillFrom(hit);
         });
 
-        // Qty +/- buttons
-        const minusBtn = document.getElementById("qtyMinusBtn");
-        const plusBtn = document.getElementById("qtyPlusBtn");
-        function parseVal() {
-          const v = parseFloat(qtyInput.value || "0");
-          return isNaN(v) ? 0 : v;
-        }
-        minusBtn && minusBtn.addEventListener("click", () => { qtyInput.value = String(Math.max(0, parseVal() - 1)); });
-        plusBtn && plusBtn.addEventListener("click", () => { qtyInput.value = String(parseVal() + 1); });
+        // Qty +/- buttons removed (simplified UI).
 
         // Mobile chips sync
         (function () {

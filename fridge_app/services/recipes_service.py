@@ -6,8 +6,6 @@ from typing import Any, List, Tuple
 
 from ..models import Item
 from ..services.settings_service import get_setting, get_secret_setting
-from ..utils.ark_config import build_ark_endpoint, get_active_ark_profile_for, get_timeout_seconds, merged_request_params
-from ..utils.ai_parse import extract_json, extract_output_text
 from ..utils.ai_engine_runtime import recipes_generate_with_engine
 import json
 import os
@@ -29,9 +27,9 @@ class Recipe:
 
 
 def get_available_ingredients(now: datetime | None = None) -> list[dict[str, Any]]:
-    """查询当前可用食材：未归档、未用完、数量>0，且未过期。"""
+    """查询当前可用食材：未用完、数量>0，且未过期。"""
     now = now or datetime.utcnow()
-    items = Item.query.filter_by(archived=False, used_up=False).all()
+    items = Item.query.filter_by(used_up=False).all()
     result: list[dict[str, Any]] = []
     for it in items:
         if it.quantity <= 0:
@@ -98,75 +96,15 @@ def build_recipe_prompt(ingredients: list[dict[str, Any]]) -> str:
 
 
 def _call_ark_text(prompt: str, *, user_text: str = "") -> Any:
-    """直接复用 Ark text 接口，保持与图片识别一致的日志行为。"""
+    """通过引擎生成菜谱（不再支持 legacy ark_profiles）。"""
     engine_obj = recipes_generate_with_engine(prompt, user_text=user_text)
     if engine_obj is not None:
         return engine_obj
 
-    profile = get_active_ark_profile_for("recipes_generate")
-    endpoint = build_ark_endpoint(profile)
-    model = str(profile.get("model") or "")
-    api_type = str(profile.get("api_type") or "responses").strip()
-    base_url = str(profile.get("base_url") or "")
-    if api_type not in {"responses", "chat_completions"}:
-        raise RuntimeError(f"[AI] recipes_generate 仅支持 responses/chat_completions，当前 api_type={api_type}")
-    extra_params = merged_request_params(profile)
-    for k in ["model", "input", "messages"]:
-        extra_params.pop(k, None)
-
     api_key = get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY")
     if not api_key:
-        raise RuntimeError("VOLCENGINE_API_KEY missing (set env var or save it in 设置页)")
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    if api_type == "chat_completions":
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-        }
-    else:
-        payload = {
-            "model": model,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                    ],
-                }
-            ],
-        }
-
-    if extra_params:
-        payload.update(extra_params)
-
-    verbose = (os.environ.get("AI_LOG_VERBOSE") or "1").strip() not in {"0", "false", "False", "OFF", "off"}
-    full_response = (os.environ.get("AI_LOG_FULL_RESPONSE") or "1").strip() not in {"0", "false", "False", "OFF", "off"}
-
-    timeout_s = get_timeout_seconds(profile, default=60)
-    resp = requests.post(endpoint, headers=headers, json=payload, timeout=timeout_s)
-    if verbose:
-        print("=" * 80)
-        print("[AI] Ark recipe response")
-        print("status:", resp.status_code)
-        try:
-            body = resp.json()
-            if full_response:
-                print(json.dumps(body, ensure_ascii=False, indent=2))
-            else:
-                print(json.dumps(body, ensure_ascii=False))
-        except Exception:
-            print(resp.text or "")
-        print("=" * 80)
-    resp.raise_for_status()
-    data = resp.json()
-    text = extract_output_text(data)
-    return extract_json(text) if text else {}
+        raise RuntimeError("AI 未配置：请设置环境变量 VOLCENGINE_API_KEY，然后在「设置 → AI 设置」选择引擎。")
+    raise RuntimeError("未配置菜谱生成引擎：请在「设置 → AI 设置 → 按能力选择引擎」选择“菜谱生成”引擎。")
 
 
 def _to_recipes(obj: Any, ingredients: list[dict[str, Any]]) -> list[Recipe]:
@@ -232,11 +170,8 @@ def generate_recipes(*, user_text: str = "") -> Tuple[list[Recipe], str | None]:
     if not ingredients:
         return [], None
     prompt = build_recipe_prompt(ingredients)
-    ark_active = get_active_ark_profile_for("recipes_generate")
-    ark_model = str(ark_active.get("model") or "")
     verbose = (os.environ.get("RECIPE_LOG_VERBOSE") or "1").strip() not in {"0", "false", "False", "OFF", "off"}
     if verbose:
-        print("[RECIPES] model:", ark_model)
         print("[RECIPES] prompt_chars:", len(prompt))
     try:
         obj = _call_ark_text(prompt, user_text=user_text)
