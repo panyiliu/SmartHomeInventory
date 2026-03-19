@@ -11,7 +11,7 @@ from ...services.items_service import mark_used_up, use_up
 from ...utils.auth import admin_required
 
 
-bp = Blueprint("items_web", __name__)
+bp = Blueprint("items", __name__)
 
 
 @bp.post("/item/<int:item_id>/mark-used-up")
