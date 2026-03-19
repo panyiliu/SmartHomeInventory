@@ -21,6 +21,8 @@ class Item(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     shelf_life_days = db.Column(db.Integer, nullable=True)
+    # 保留 legacy 字段以兼容旧数据库（NOT NULL），当前业务逻辑不再使用。
+    archived = db.Column(db.Boolean, nullable=False, default=False)
     used_up = db.Column(db.Boolean, nullable=False, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
