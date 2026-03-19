@@ -114,6 +114,29 @@
         box-shadow: 0 6px 14px rgba(44,95,45,.16);
       }
 
+      /* Add page tabs: keep icons/text aligned and tab widths consistent */
+      #addTabs{
+        width: 100%;
+      }
+      #addTabs .nav-item{
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      #addTabs .nav-link{
+        width: 100%;
+        min-height: 44px;
+        padding-left: .75rem;
+        padding-right: .75rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+      }
+      #addTabs .nav-link i{
+        display: inline-flex;
+        align-items: center;
+      }
+
       /* Remove default "blue" focus glow everywhere */
       .btn:focus,
       .btn:focus-visible,
