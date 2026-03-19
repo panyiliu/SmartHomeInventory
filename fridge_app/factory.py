@@ -17,6 +17,7 @@ from .routes.main import bp as main_bp
 from .routes.recipes import bp as recipes_bp
 from .routes.ai_models import bp as ai_models_bp
 from .routes.ai_prompts import bp as ai_prompts_bp
+from .routes.users import bp as users_bp
 from .services.db_migration import ensure_schema
 from .utils.doubao_core import FIXED_PROMPT as VISION_DEFAULT_PROMPT
 from .utils.ai_text import PROMPT_TEXT_TO_ITEMS as TEXT_DEFAULT_PROMPT
@@ -550,6 +551,7 @@ def create_app() -> Flask:
     app.register_blueprint(recipes_bp)
     app.register_blueprint(ai_models_bp)
     app.register_blueprint(ai_prompts_bp)
+    app.register_blueprint(users_bp)
 
     return app
 

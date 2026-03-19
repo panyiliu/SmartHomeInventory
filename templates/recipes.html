@@ -27,6 +27,12 @@
         点击上方按钮，根据当前库存生成 3~5 道家常菜推荐。
       </div>
 
+      <div class="mb-3">
+        <label class="form-label mb-1">偏好/补充需求（可选）</label>
+        <textarea id="recipeUserText" class="form-control" rows="2" placeholder="例如：不吃辣、想吃清淡、今晚想吃面食、家里有空气炸锅…"></textarea>
+        <div class="form-text">留空也可以正常生成。</div>
+      </div>
+
       <div id="recipeLoading" class="py-2 d-none">
         <div class="border rounded-4 p-3 bg-white">
           <div class="d-flex justify-content-between align-items-center gap-2">
@@ -267,9 +273,11 @@
         logStep("🧺 正在整理库存清单…");
         try {
           logStep("📨 已发出请求，等待返回…");
+          const userText = (document.getElementById("recipeUserText")?.value || "").trim();
           const res = await fetch("{{ url_for('recipes.api_generate') }}", {
             method: "POST",
-            headers: { "X-Requested-With": "XMLHttpRequest" },
+            headers: { "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/json" },
+            body: JSON.stringify({ user_text: userText }),
             signal: abortCtrl.signal,
           });
           logStep(`✅ 已收到服务器响应（HTTP ${res.status}）`);

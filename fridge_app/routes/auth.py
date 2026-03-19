@@ -71,6 +71,9 @@ def login_post():
     if not u or not check_password_hash(u.password_hash, pwd):
         flash("账号或密码错误。", "danger")
         return redirect(url_for("auth.login", next=request.args.get("next") or ""))
+    if not bool(getattr(u, "active", True)):
+        flash("该账号已被禁用，请联系管理员。", "danger")
+        return redirect(url_for("auth.login", next=request.args.get("next") or ""))
     u.last_login_at = datetime.utcnow()
     db.session.commit()
     login_user(u)

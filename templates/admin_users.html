@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}家庭成员 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+          <h4 class="mb-1 fw-semibold">家庭成员管理</h4>
+          <div class="text-muted small">管理员可创建成员账号、禁用账号、重置密码。</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-primary" href="{{ url_for('admin.admin_settings') }}"><i class="bi bi-gear me-1"></i>返回设置</a>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-5">
+          <div class="border rounded-4 p-3 bg-white">
+            <div class="fw-semibold mb-2">新增成员</div>
+            <form method="post" action="{{ url_for('users.users_create') }}" autocomplete="off">
+              <div class="mb-2">
+                <label class="form-label">用户名</label>
+                <input class="form-control" name="username" placeholder="例如：ethan / mom / dad" required minlength="3" />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">角色</label>
+                <select class="form-select" name="role">
+                  <option value="member" selected>成员</option>
+                  <option value="admin">管理员</option>
+                </select>
+                <div class="form-text">管理员可进入设置、AI 模型、提示词等页面。</div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">初始密码（可留空自动生成）</label>
+                <input class="form-control" type="text" name="password" placeholder="至少 8 位；留空自动生成" />
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="activeNew" name="active" checked />
+                <label class="form-check-label" for="activeNew">启用账号</label>
+              </div>
+              <button class="btn btn-primary" type="submit"><i class="bi bi-person-plus me-1"></i>创建</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-7">
+          <div class="border rounded-4 p-3 bg-white">
+            <div class="fw-semibold mb-2">成员列表</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="text-muted">
+                  <tr>
+                    <th>用户名</th>
+                    <th>角色</th>
+                    <th>状态</th>
+                    <th style="width: 320px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in users %}
+                    <tr>
+                      <td class="fw-semibold">{{ u.username }}</td>
+                      <td>
+                        {% if u.is_admin() %}
+                          <span class="badge text-bg-warning">admin</span>
+                        {% else %}
+                          <span class="badge text-bg-secondary">member</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if u.active %}
+                          <span class="badge text-bg-success">启用</span>
+                        {% else %}
+                          <span class="badge text-bg-danger">禁用</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <div class="d-flex flex-wrap gap-2">
+                          <form method="post" action="{{ url_for('users.users_toggle_active', user_id=u.id) }}" onsubmit="return confirm('确认切换账号状态：{{ u.username }}？');">
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">
+                              {% if u.active %}禁用{% else %}启用{% endif %}
+                            </button>
+                          </form>
+                          <form method="post" action="{{ url_for('users.users_reset_password', user_id=u.id) }}" onsubmit="return confirm('确认重置密码：{{ u.username }}？');">
+                            <input class="form-control form-control-sm d-inline-block" style="width: 180px;" name="new_password" placeholder="留空自动生成" />
+                            <button class="btn btn-sm btn-outline-primary" type="submit">重置密码</button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="form-text mt-2">提示：重置/自动生成的密码会在页面顶部以提示条显示，请及时复制保存。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

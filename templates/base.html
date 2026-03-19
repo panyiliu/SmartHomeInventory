@@ -649,6 +649,12 @@
             </a>
           {% endif %}
 
+          {% if current_user and current_user.is_admin() %}
+            <a class="btn btn-outline-primary" href="{{ url_for('users.users_list') }}" aria-label="家庭成员" title="家庭成员">
+              <i class="bi bi-people"></i>
+            </a>
+          {% endif %}
+
           {% if current_user %}
             <form method="post" action="{{ url_for('auth.logout') }}" class="ms-1">
               <button class="btn btn-outline-secondary" type="submit" title="退出登录" aria-label="退出登录">

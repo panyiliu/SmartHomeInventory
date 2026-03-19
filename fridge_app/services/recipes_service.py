@@ -97,9 +97,9 @@ def build_recipe_prompt(ingredients: list[dict[str, Any]]) -> str:
     return tmpl.replace("{{ingredients}}", ing_block)
 
 
-def _call_ark_text(prompt: str) -> Any:
+def _call_ark_text(prompt: str, *, user_text: str = "") -> Any:
     """直接复用 Ark text 接口，保持与图片识别一致的日志行为。"""
-    engine_obj = recipes_generate_with_engine(prompt)
+    engine_obj = recipes_generate_with_engine(prompt, user_text=user_text)
     if engine_obj is not None:
         return engine_obj
 
@@ -223,7 +223,7 @@ def _to_recipes(obj: Any, ingredients: list[dict[str, Any]]) -> list[Recipe]:
     return recipes
 
 
-def generate_recipes() -> Tuple[list[Recipe], str | None]:
+def generate_recipes(*, user_text: str = "") -> Tuple[list[Recipe], str | None]:
     """
     主入口：根据库存生成菜谱列表。
     返回 (recipes, error)；error 非 None 表示失败。
@@ -239,7 +239,7 @@ def generate_recipes() -> Tuple[list[Recipe], str | None]:
         print("[RECIPES] model:", ark_model)
         print("[RECIPES] prompt_chars:", len(prompt))
     try:
-        obj = _call_ark_text(prompt)
+        obj = _call_ark_text(prompt, user_text=user_text)
     except RuntimeError as e:
         return [], str(e)
     except Exception as e:

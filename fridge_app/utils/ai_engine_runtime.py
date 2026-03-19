@@ -218,16 +218,18 @@ def text_extract_with_engine(user_text: str, *, prompt: str) -> Any:
     return extract_json(out_text) if out_text else body or {}
 
 
-def recipes_generate_with_engine(prompt: str) -> Any:
+def recipes_generate_with_engine(prompt: str, *, user_text: str = "") -> Any:
     engine = _get_engine("ai_engine_recipes_model_id")
     if not engine:
         return None
     if "{{prompt}}" not in (engine.request_template or ""):
         return None
+    if "{{user_text}}" in (engine.request_template or "") and not (user_text or "").strip():
+        user_text = "请根据以上食材推荐 3~5 道家常晚餐菜谱。"
     # recipes_generate needs stable non-stream JSON output; drop tools/search by default.
     body, out_text = _call_engine(
         engine,
-        mapping={"{{prompt}}": prompt, "{{user_text}}": ""},
+        mapping={"{{prompt}}": prompt, "{{user_text}}": user_text or ""},
         force_non_stream=True,
         drop_tools=True,
     )

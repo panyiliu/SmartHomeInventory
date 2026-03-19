@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
 from ..services.recipes_service import generate_recipes
 from ..services.recipes_service import get_available_ingredients
@@ -23,6 +23,9 @@ def api_generate():
     if not ingredients:
         return jsonify({"ok": True, "recipes": [], "reason": "no_ingredients"})
 
+    payload = request.get_json(silent=True) or {}
+    user_text = (payload.get("user_text") or "").strip()
+
     verbose = (os.environ.get("RECIPE_LOG_VERBOSE") or "1").strip() not in {"0", "false", "False", "OFF", "off"}
     start = time.time()
     if verbose:
@@ -30,7 +33,7 @@ def api_generate():
         print("[RECIPES] generate start")
         print("ingredients_count:", len(ingredients))
 
-    recipes, err = generate_recipes()
+    recipes, err = generate_recipes(user_text=user_text)
     if err:
         if verbose:
             cost_ms = int((time.time() - start) * 1000)

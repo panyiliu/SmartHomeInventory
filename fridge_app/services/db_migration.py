@@ -50,3 +50,18 @@ def ensure_schema(db: SQLAlchemy) -> None:
 
     db.session.commit()
 
+    # users table migration (auth system)
+    try:
+        user_cols = {row[1] for row in db.session.execute(db.text("PRAGMA table_info(users)")).all()}
+    except OperationalError:
+        user_cols = set()
+
+    if user_cols:
+        if "active" not in user_cols:
+            db.session.execute(db.text("ALTER TABLE users ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1"))
+        if "role" not in user_cols:
+            db.session.execute(db.text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
+        if "last_login_at" not in user_cols:
+            db.session.execute(db.text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
+        db.session.commit()
+
