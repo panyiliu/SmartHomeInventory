@@ -19,6 +19,14 @@ from .routes.ai_prompts import bp as ai_prompts_bp
 from .services.db_migration import ensure_schema
 from .utils.doubao_core import FIXED_PROMPT as VISION_DEFAULT_PROMPT
 from .utils.ai_text import PROMPT_TEXT_TO_ITEMS as TEXT_DEFAULT_PROMPT
+from .services.settings_service import (
+    DEFAULT_CATEGORY_ICON_MAP,
+    DEFAULT_LOCATION_ICON_MAP,
+    DEFAULT_CATEGORY_SHORT_LABEL_MAP,
+    DEFAULT_LOCATION_SHORT_LABEL_MAP,
+    dump_json_object,
+    dump_option_list,
+)
 
 
 def create_app() -> Flask:
@@ -40,12 +48,30 @@ def create_app() -> Flask:
         db.create_all()
         ensure_schema(db)
 
+        def ensure_setting_if_empty(key: str, value: str) -> None:
+            row = db.session.get(Setting, key)
+            if row is None:
+                db.session.add(Setting(key=key, value=value, updated_at=datetime.utcnow()))
+                return
+            cur = (row.value or "").strip()
+            if not cur or cur == "{}":
+                row.value = value
+                row.updated_at = datetime.utcnow()
+
         if db.session.get(Setting, "expiring_soon_days") is None:
             db.session.add(Setting(key="expiring_soon_days", value="3", updated_at=datetime.utcnow()))
         if db.session.get(Setting, "barcode_app_id") is None:
             db.session.add(Setting(key="barcode_app_id", value="", updated_at=datetime.utcnow()))
         if db.session.get(Setting, "barcode_app_secret") is None:
             db.session.add(Setting(key="barcode_app_secret", value="", updated_at=datetime.utcnow()))
+
+        # Seed default "数据与选项" on fresh DBs (or when user left them empty as {}).
+        ensure_setting_if_empty("category_options", dump_option_list(["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "日用品", "其他"]))
+        ensure_setting_if_empty("location_options", dump_option_list(["冰箱", "橱柜", "厨房", "室外", "卫生间", "大卧室", "小卧室"]))
+        ensure_setting_if_empty("category_icon_map_json", dump_json_object(DEFAULT_CATEGORY_ICON_MAP))
+        ensure_setting_if_empty("location_icon_map_json", dump_json_object(DEFAULT_LOCATION_ICON_MAP))
+        ensure_setting_if_empty("category_label_map_json", dump_json_object(DEFAULT_CATEGORY_SHORT_LABEL_MAP))
+        ensure_setting_if_empty("location_label_map_json", dump_json_object(DEFAULT_LOCATION_SHORT_LABEL_MAP))
         db.session.commit()
 
         # One-time migration: rename ark_api_key -> volcengine_api_key (strict naming).

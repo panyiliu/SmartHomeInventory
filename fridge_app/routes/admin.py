@@ -49,18 +49,23 @@ def admin_settings():
     default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
     cat_list = parse_option_list(get_setting("category_options", ""), default=default_categories)
     loc_list = parse_option_list(get_setting("location_options", ""), default=default_locations)
-    category_icon_map_json = dump_json_object(
-        parse_json_object(get_setting("category_icon_map_json", ""), default=DEFAULT_CATEGORY_ICON_MAP)
-    )
-    location_icon_map_json = dump_json_object(
-        parse_json_object(get_setting("location_icon_map_json", ""), default=DEFAULT_LOCATION_ICON_MAP)
-    )
-    category_label_map_json = dump_json_object(
-        parse_json_object(get_setting("category_label_map_json", ""), default=DEFAULT_CATEGORY_SHORT_LABEL_MAP)
-    )
-    location_label_map_json = dump_json_object(
-        parse_json_object(get_setting("location_label_map_json", ""), default=DEFAULT_LOCATION_SHORT_LABEL_MAP)
-    )
+    cat_icon_obj = parse_json_object(get_setting("category_icon_map_json", ""), default=DEFAULT_CATEGORY_ICON_MAP)
+    if not cat_icon_obj:
+        cat_icon_obj = dict(DEFAULT_CATEGORY_ICON_MAP)
+    loc_icon_obj = parse_json_object(get_setting("location_icon_map_json", ""), default=DEFAULT_LOCATION_ICON_MAP)
+    if not loc_icon_obj:
+        loc_icon_obj = dict(DEFAULT_LOCATION_ICON_MAP)
+    cat_label_obj = parse_json_object(get_setting("category_label_map_json", ""), default=DEFAULT_CATEGORY_SHORT_LABEL_MAP)
+    if not cat_label_obj:
+        cat_label_obj = dict(DEFAULT_CATEGORY_SHORT_LABEL_MAP)
+    loc_label_obj = parse_json_object(get_setting("location_label_map_json", ""), default=DEFAULT_LOCATION_SHORT_LABEL_MAP)
+    if not loc_label_obj:
+        loc_label_obj = dict(DEFAULT_LOCATION_SHORT_LABEL_MAP)
+
+    category_icon_map_json = dump_json_object(cat_icon_obj)
+    location_icon_map_json = dump_json_object(loc_icon_obj)
+    category_label_map_json = dump_json_object(cat_label_obj)
+    location_label_map_json = dump_json_object(loc_label_obj)
 
     # feature toggles
     notify_enabled = (get_setting("notify_enabled", "1") or "1").strip() != "0"

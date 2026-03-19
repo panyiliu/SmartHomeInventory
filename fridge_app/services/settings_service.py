@@ -16,8 +16,10 @@ DEFAULT_CATEGORY_ICON_MAP: dict[str, str] = {
     "海鲜": "emoji:🦐",
     "蛋奶": "emoji:🥚",
     "主食": "emoji:🍚",
-    "调料": "emoji:🧂",
+  "调料": "emoji:🧂",
+  "调味品": "emoji:🧂",
     "饮料": "emoji:🥤",
+  "饮品": "emoji:🥛",
     "零食": "emoji:🍪",
     "日用品": "emoji:🧻",
     "其他": "emoji:📦",
@@ -26,12 +28,14 @@ DEFAULT_CATEGORY_ICON_MAP: dict[str, str] = {
 DEFAULT_LOCATION_ICON_MAP: dict[str, str] = {
     "冰箱": "emoji:🧊",
     "冷藏": "emoji:🧊",
-    "冷冻": "emoji:🧊",
+  "冷冻": "emoji:❄️",
     "常温": "emoji:🌡️",
     "橱柜": "emoji:🗄️",
     "厨房": "emoji:🍳",
-    "室外": "emoji:🌤️",
-    "卫生间": "emoji:🚻",
+  "室外": "emoji:🏡",
+  "卫生间": "emoji:🚿",
+  "大卧室": "emoji:🛏️",
+  "小卧室": "emoji:🛏️",
 }
 
 DEFAULT_CATEGORY_SHORT_LABEL_MAP: dict[str, str] = {
@@ -40,9 +44,11 @@ DEFAULT_CATEGORY_SHORT_LABEL_MAP: dict[str, str] = {
     "肉类": "肉",
     "海鲜": "海",
     "蛋奶": "蛋",
-    "主食": "食",
-    "调料": "料",
+  "主食": "粮",
+  "调料": "调",
+  "调味品": "调",
     "饮料": "饮",
+  "饮品": "饮",
     "零食": "零",
     "日用品": "日",
     "其他": "其",
@@ -57,6 +63,8 @@ DEFAULT_LOCATION_SHORT_LABEL_MAP: dict[str, str] = {
     "厨房": "厨",
     "室外": "外",
     "卫生间": "卫",
+  "大卧室": "大卧",
+  "小卧室": "小卧",
 }
 
 
@@ -207,6 +215,8 @@ def normalize_icon_spec(spec: str | None) -> dict:
 def get_category_icon_map_normalized() -> dict[str, dict]:
     raw = get_setting("category_icon_map_json", "")
     obj = parse_json_object(raw, default=DEFAULT_CATEGORY_ICON_MAP)
+    if not obj:
+        obj = dict(DEFAULT_CATEGORY_ICON_MAP)
     out: dict[str, dict] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -219,6 +229,8 @@ def get_category_icon_map_normalized() -> dict[str, dict]:
 def get_location_icon_map_normalized() -> dict[str, dict]:
     raw = get_setting("location_icon_map_json", "")
     obj = parse_json_object(raw, default=DEFAULT_LOCATION_ICON_MAP)
+    if not obj:
+        obj = dict(DEFAULT_LOCATION_ICON_MAP)
     out: dict[str, dict] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -231,6 +243,8 @@ def get_location_icon_map_normalized() -> dict[str, dict]:
 def get_category_short_label_map() -> dict[str, str]:
     raw = get_setting("category_label_map_json", "")
     obj = parse_json_object(raw, default=DEFAULT_CATEGORY_SHORT_LABEL_MAP)
+    if not obj:
+        obj = dict(DEFAULT_CATEGORY_SHORT_LABEL_MAP)
     out: dict[str, str] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -243,6 +257,8 @@ def get_category_short_label_map() -> dict[str, str]:
 def get_location_short_label_map() -> dict[str, str]:
     raw = get_setting("location_label_map_json", "")
     obj = parse_json_object(raw, default=DEFAULT_LOCATION_SHORT_LABEL_MAP)
+    if not obj:
+        obj = dict(DEFAULT_LOCATION_SHORT_LABEL_MAP)
     out: dict[str, str] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -253,11 +269,11 @@ def get_location_short_label_map() -> dict[str, str]:
 
 
 def get_category_options() -> list[str]:
-    default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "其他"]
+    default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "日用品", "其他"]
     return parse_option_list(get_setting("category_options", ""), default=default_categories)
 
 
 def get_location_options() -> list[str]:
-    default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
+    default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间", "大卧室", "小卧室"]
     return parse_option_list(get_setting("location_options", ""), default=default_locations)
 
