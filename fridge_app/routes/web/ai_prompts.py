@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from ..extensions import db
-from ..models import AiPromptTemplate
-from ..utils.auth import admin_required
+from ...extensions import db
+from ...models import AiPromptTemplate
+from ...utils.auth import admin_required
 
 
 bp = Blueprint("ai_prompts", __name__, url_prefix="/admin")
@@ -14,7 +15,6 @@ bp = Blueprint("ai_prompts", __name__, url_prefix="/admin")
 @bp.get("/ai-prompts")
 @admin_required
 def ai_prompts_list():
-    # group by category_code (simple MVP)
     categories = (
         AiPromptTemplate.query.with_entities(AiPromptTemplate.category_code)
         .distinct()
@@ -57,10 +57,9 @@ def ai_prompts_new():
 
     row = AiPromptTemplate(category_code=category_code, name=name, content=content, is_default=False)
     if is_default:
-        # unset others
-        AiPromptTemplate.query.filter(AiPromptTemplate.category_code == category_code, AiPromptTemplate.is_default == True).update(  # noqa
-            {"is_default": False}  # type: ignore
-        )
+        AiPromptTemplate.query.filter(
+            AiPromptTemplate.category_code == category_code, AiPromptTemplate.is_default == True  # noqa
+        ).update({"is_default": False})  # type: ignore
         row.is_default = True
 
     db.session.add(row)
@@ -90,11 +89,10 @@ def ai_prompts_edit(prompt_id: int):
         flash("category_code 和 name 均不能为空。", "danger")
         return redirect(url_for("ai_prompts.ai_prompts_edit", prompt_id=prompt_id))
 
-    # If default changed, unset others.
     if is_default:
-        AiPromptTemplate.query.filter(AiPromptTemplate.category_code == category_code, AiPromptTemplate.is_default == True).update(  # noqa
-            {"is_default": False}  # type: ignore
-        )
+        AiPromptTemplate.query.filter(
+            AiPromptTemplate.category_code == category_code, AiPromptTemplate.is_default == True  # noqa
+        ).update({"is_default": False})  # type: ignore
         row.is_default = True
     else:
         row.is_default = False

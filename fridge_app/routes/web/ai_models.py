@@ -6,16 +6,15 @@ import os
 import time
 from typing import Any
 
+import requests
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-import requests
-
-from ..extensions import db
-from ..models import AiModel, AiPromptTemplate
-from ..services.settings_service import get_secret_setting
-from ..utils.ai_engine_runtime import _build_ark_endpoint
-from ..utils.ai_parse import extract_json, extract_output_text
-from ..utils.auth import admin_required
+from ...extensions import db
+from ...models import AiModel, AiPromptTemplate
+from ...services.settings_service import get_secret_setting
+from ...utils.ai_engine_runtime import _build_ark_endpoint
+from ...utils.ai_parse import extract_json, extract_output_text
+from ...utils.auth import admin_required
 
 
 bp = Blueprint("ai_models", __name__, url_prefix="/admin")
@@ -51,7 +50,6 @@ def _strip_empty_image_blocks(obj: Any) -> Any:
       - responses: {"type":"input_image","image_url":""}
     """
     if isinstance(obj, dict):
-        # recurse first
         out = {k: _strip_empty_image_blocks(v) for k, v in obj.items()}
         return out
     if isinstance(obj, list):
@@ -110,7 +108,6 @@ def _infer_ability_and_tags(m: AiModel) -> tuple[str, list[str]]:
         tags.append("流式")
     if "web_search" in tpl_low:
         tags.append("联网")
-    # “视觉”与“图片识别”语义重复，只有在非“图片识别”用途时才提示。
     if ability != "图片识别" and "{{image_data_url}}" in tpl:
         tags.append("视觉")
     return ability, tags
@@ -145,7 +142,6 @@ def ai_models_list():
         view_models.append({"row": m, "title": _display_title(m, ability), "ability": ability, "tags": tags[:3]})
     prompt_templates = AiPromptTemplate.query.order_by(AiPromptTemplate.category_code, AiPromptTemplate.is_default.desc()).all()
 
-    # Basic stats for UX
     model_counts = {}
     for m in models:
         model_counts[m.api_type] = model_counts.get(m.api_type, 0) + 1
@@ -182,7 +178,6 @@ def ai_models_edit(model_id: int):
             api_type_options=["responses", "chat_completions", "images_generations", "contents_generations_tasks"],
         )
 
-    # POST save
     name = (request.form.get("name") or "").strip()
     display_name = (request.form.get("display_name") or "").strip()
     api_type = (request.form.get("api_type") or "responses").strip()
@@ -232,7 +227,6 @@ def ai_models_edit(model_id: int):
         flash("模型标识不能为空。", "danger")
         return redirect(url_for("ai_models.ai_models_edit", model_id=model_id))
 
-    # Unique constraint check (best-effort)
     existed = AiModel.query.filter(AiModel.name == name, AiModel.id != row.id).first()
     if existed:
         flash("该模型名称已存在，请换一个。", "danger")
@@ -329,7 +323,6 @@ def ai_models_create():
 @admin_required
 def ai_models_delete(model_id: int):
     row = AiModel.query.get_or_404(model_id)
-    # UI should confirm; back-end double-check enabled/exists.
     db.session.delete(row)
     db.session.commit()
     flash("模型已删除。", "success")
@@ -341,7 +334,6 @@ def ai_models_delete(model_id: int):
 def ai_models_test(model_id: int):
     row = AiModel.query.get_or_404(model_id)
     prompt_templates = AiPromptTemplate.query.order_by(AiPromptTemplate.category_code, AiPromptTemplate.is_default.desc()).all()
-    # MVP: default to interface_test category connectivity prompt.
     default_prompt_template = (
         AiPromptTemplate.query.filter_by(category_code="interface_test", is_default=True)
         .order_by(AiPromptTemplate.updated_at.desc())
@@ -367,7 +359,6 @@ def ai_models_test(model_id: int):
 
         uploaded_image_data_url = _image_to_data_url(request.files.get("image"))
 
-        # Auth
         api_key = get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY")
         if not api_key:
             flash("未配置 VOLCENGINE_API_KEY：请到 设置->安全设置 设置。", "danger")
@@ -420,8 +411,6 @@ def ai_models_test(model_id: int):
             stream_text = ""
             stream_events: list[dict[str, Any]] = []
             if wants_stream:
-                # Best-effort SSE parsing: data: <json>
-                # Collect delta text if present.
                 chunks: list[str] = []
                 for raw_line in resp.iter_lines():
                     if not raw_line:
@@ -439,7 +428,6 @@ def ai_models_test(model_id: int):
                         ev = json.loads(s)
                         if isinstance(ev, dict):
                             stream_events.append(ev)
-                            # Compatible with your sample: response.output_text.delta
                             if ev.get("type") == "response.output_text.delta":
                                 delta = ev.get("delta", "")
                                 if isinstance(delta, str) and delta:
@@ -447,7 +435,6 @@ def ai_models_test(model_id: int):
                     except Exception:
                         continue
                 stream_text = "".join(chunks)
-                # For stream mode, avoid reading resp.text again (already consumed).
                 resp_text = stream_text or ""
             try:
                 resp_json = resp.json()
@@ -461,7 +448,6 @@ def ai_models_test(model_id: int):
             except Exception:
                 response_json_pretty = None
 
-            # Backend logging for connectivity tests
             verbose_raw = (os.environ.get("AI_LOG_VERBOSE") or "1").strip().lower()
             verbose = verbose_raw in {"1", "true", "yes", "on"}
             full_raw = (os.environ.get("AI_LOG_FULL_RESPONSE") or "1").strip().lower()
@@ -484,10 +470,8 @@ def ai_models_test(model_id: int):
 
             extracted = None
             parse_mode = (row.response_parse_mode or "auto_json").strip()
-            out_text_nonempty = False
             if parse_mode == "auto_json" and isinstance(resp_json, dict):
                 out_text = extract_output_text(resp_json)
-                out_text_nonempty = bool(str(out_text or "").strip())
                 extracted = extract_json(out_text) if out_text else {}
 
             result = {
@@ -510,45 +494,27 @@ def ai_models_test(model_id: int):
                 result["contains_match"] = True
 
             contains_ok = bool(result["contains_match"])
-
-            # Connectivity rule (MVP):
-            # - HTTP 2xx + (optional contains_match) => 通畅
-            # - Don't require JSON parse success for connectivity.
             if http_ok and contains_ok:
                 if parse_mode == "raw":
                     result["ok"] = True
                 elif parse_mode == "auto_json":
-                    # If server returned something usable, treat as connectivity success.
-                    result["ok"] = out_text_nonempty or extracted is not None
-                else:
                     result["ok"] = True
-            else:
-                result["ok"] = False
-
-            # parsed pretty
-            try:
-                if extracted is not None:
-                    result["parsed_pretty"] = json.dumps(extracted, ensure_ascii=False, indent=2)
-                else:
-                    result["parsed_pretty"] = None
-            except Exception:
-                result["parsed_pretty"] = None
+            return render_template(
+                "ai_model_test.html",
+                model=row,
+                prompt_templates=prompt_templates,
+                selected_prompt_template_id=prompt_row.id if prompt_row else selected_prompt_template_id,
+                result=result,
+            )
         except Exception as e:
-            duration_ms = int((time.time() - t0) * 1000)
-            result = {
-                "ok": False,
-                "duration_ms": duration_ms,
-                "error": str(e),
-                "endpoint": endpoint,
-                "request_payload": payload,
-                "request_payload_pretty": request_payload_pretty,
-            }
+            flash(f"测试失败：{e}", "danger")
+            return redirect(url_for("ai_models.ai_models_test", model_id=model_id))
 
     return render_template(
         "ai_model_test.html",
         model=row,
         prompt_templates=prompt_templates,
-        result=result,
         selected_prompt_template_id=selected_prompt_template_id,
+        result=result,
     )
 

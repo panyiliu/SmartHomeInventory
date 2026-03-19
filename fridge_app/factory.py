@@ -18,8 +18,8 @@ from .routes.main import bp as main_bp
 from .routes.web.items_actions import bp as items_web_bp
 from .routes.web.recipes import bp as recipes_web_bp
 from .routes.api.recipes import bp as recipes_api_bp
-from .routes.ai_models import bp as ai_models_bp
-from .routes.ai_prompts import bp as ai_prompts_bp
+from .routes.web.ai_models import bp as ai_models_bp
+from .routes.web.ai_prompts import bp as ai_prompts_bp
 from .routes.users import bp as users_bp
 from .services.db_migration import ensure_schema
 from .utils.doubao_core import FIXED_PROMPT as VISION_DEFAULT_PROMPT
