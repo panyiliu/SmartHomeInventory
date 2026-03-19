@@ -750,6 +750,8 @@
         }, 25000) : null;
         logAi(aiTextLogEl, "🧠 正在整理这段话里提到的所有食材…");
         const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+        let modalShown = false;
+        let modalShowTimer = null;
         // 临时调整提示文案为“解析文本”
         if (aiModalEl) {
           const titleEl = aiModalEl.querySelector(".fw-semibold");
@@ -757,7 +759,12 @@
           if (titleEl) titleEl.textContent = "正在解析文本…";
           if (descEl) descEl.textContent = "请稍候，识别结果会自动出现在下方待确认列表。";
         }
-        try { modal?.show(); } catch (e) {}
+        // 延迟显示：避免“请求瞬间失败也闪一下转轮”
+        if (modal) {
+          modalShowTimer = window.setTimeout(() => {
+            try { modal.show(); modalShown = true; } catch (e) {}
+          }, 220);
+        }
         aiTextParseBtn.disabled = true;
         try {
           logAi(aiTextLogEl, "📨 已发出请求，等待 AI 解析结果…");
@@ -792,7 +799,21 @@
           if (timeoutId) window.clearTimeout(timeoutId);
           aiTextAbort = null;
           aiTextParseBtn.disabled = false;
+          if (modalShowTimer) {
+            try { window.clearTimeout(modalShowTimer); } catch (e) {}
+            modalShowTimer = null;
+          }
+          // 强力兜底关闭：bootstrap hide + DOM fallback，确保失败时不残留遮罩/弹窗
           try { modal?.hide(); } catch (e) {}
+          if (aiModalEl) {
+            try { aiModalEl.classList.remove("show"); } catch (e) {}
+            try { aiModalEl.style.display = "none"; } catch (e) {}
+            try { aiModalEl.setAttribute("aria-hidden", "true"); } catch (e) {}
+            try { document.body.classList.remove("modal-open"); } catch (e) {}
+            try {
+              document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
+            } catch (e) {}
+          }
         }
       });
       aiTextClearBtn && aiTextClearBtn.addEventListener("click", () => {
@@ -809,7 +830,13 @@
           const file = aiInput.files && aiInput.files[0] ? aiInput.files[0] : null;
           if (!file) return;
           const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
-          try { modal?.show(); } catch (e) {}
+          let modalShown = false;
+          let modalShowTimer = null;
+          if (modal) {
+            modalShowTimer = window.setTimeout(() => {
+              try { modal.show(); modalShown = true; } catch (e) {}
+            }, 160);
+          }
           try {
             logAi(aiPhotoLogEl, "📷 已选择图片，准备发送到 AI 识别…");
             const fd = new FormData();
@@ -832,7 +859,20 @@
             toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
             logAi(aiPhotoLogEl, `❌ 识别失败：${(e && e.message) ? e.message : "AI 服务异常"}`);
           } finally {
+            if (modalShowTimer) {
+              try { window.clearTimeout(modalShowTimer); } catch (e) {}
+              modalShowTimer = null;
+            }
             try { modal?.hide(); } catch (e) {}
+            if (aiModalEl) {
+              try { aiModalEl.classList.remove("show"); } catch (e) {}
+              try { aiModalEl.style.display = "none"; } catch (e) {}
+              try { aiModalEl.setAttribute("aria-hidden", "true"); } catch (e) {}
+              try { document.body.classList.remove("modal-open"); } catch (e) {}
+              try {
+                document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
+              } catch (e) {}
+            }
             aiInput.value = "";
           }
         });
