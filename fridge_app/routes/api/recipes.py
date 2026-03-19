@@ -3,18 +3,12 @@ from __future__ import annotations
 import os
 import time
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 
-from ..services.recipes_service import generate_recipes
-from ..services.recipes_service import get_available_ingredients
-
-
-bp = Blueprint("recipes", __name__)
+from ...services.recipes_service import generate_recipes, get_available_ingredients
 
 
-@bp.get("/recipes")
-def index():
-    return render_template("recipes.html")
+bp = Blueprint("recipes_api", __name__)
 
 
 @bp.post("/api/recipes/generate")
