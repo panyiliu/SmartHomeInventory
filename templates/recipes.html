@@ -274,7 +274,7 @@
         try {
           logStep("📨 已发出请求，等待返回…");
           const userText = (document.getElementById("recipeUserText")?.value || "").trim();
-          const res = await fetch("{{ url_for('recipes.api_generate') }}", {
+          const res = await fetch("{{ url_for('recipes_api.api_generate') }}", {
             method: "POST",
             headers: { "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/json" },
             body: JSON.stringify({ user_text: userText }),
