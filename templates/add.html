@@ -13,9 +13,6 @@
           </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#scanModal">
-            <i class="bi bi-upc-scan me-1"></i>扫码添加
-          </button>
           <input id="aiImageInput" type="file" accept="image/*" capture="environment" class="d-none" />
         </div>
       </div>
@@ -34,6 +31,11 @@
         <li class="nav-item" role="presentation">
           <button class="nav-link" id="tab-manual" data-bs-toggle="pill" data-bs-target="#pane-manual" type="button" role="tab" aria-controls="pane-manual" aria-selected="false">
             <i class="bi bi-pencil-square me-1"></i>手动新增
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-scan" data-bs-toggle="pill" data-bs-target="#pane-scan" type="button" role="tab" aria-controls="pane-scan" aria-selected="false">
+            <i class="bi bi-upc-scan me-1"></i>扫码添加
           </button>
         </li>
       </ul>
@@ -217,6 +219,25 @@
               <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}"><i class="bi bi-x-circle me-1"></i>返回列表</a>
             </div>
           </form>
+        </div>
+
+        <div class="tab-pane fade" id="pane-scan" role="tabpanel" aria-labelledby="tab-scan">
+          <div class="p-3 rounded-4 mb-3" style="background: rgba(16,24,40,.03); border: 1px solid rgba(16,24,40,.08);">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+              <div>
+                <div class="fw-semibold">扫码添加</div>
+                <div class="text-muted small">对准条码/二维码，自动识别并入库。</div>
+              </div>
+              <div>
+                <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#scanModal">
+                  <i class="bi bi-upc-scan me-1"></i>打开扫码
+                </button>
+              </div>
+            </div>
+            <div class="form-text">
+              摄像头权限被拦截时，弹窗里会有对应引导；也支持在扫码弹窗中手动录入条码兜底。
+            </div>
+          </div>
         </div>
       </div>
 
