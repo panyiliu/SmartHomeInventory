@@ -2,74 +2,18 @@ from __future__ import annotations
 
 import os
 import traceback
-from datetime import datetime
-from urllib.parse import parse_qs, urlparse
 
-from flask import Blueprint, flash, jsonify, redirect, request, url_for
+from flask import Blueprint, jsonify, request
 
-from ..extensions import db
-from ..models import Item
-from ..services.barcode_service import barcode_lookup
-from ..services.items_service import mark_used_up, use_up
-from ..services.settings_service import safe_int
-from ..utils.ai_image import recognize_foods_from_image
-from ..utils.ai_text import extract_items_from_text
-from ..utils.auth import admin_required
+from ...extensions import db
+from ...models import Item
+from ...services.barcode_service import barcode_lookup
+from ...services.settings_service import safe_int
+from ...utils.ai_image import recognize_foods_from_image
+from ...utils.ai_text import extract_items_from_text
 
 
-bp = Blueprint("items", __name__)
-
-
-@bp.post("/item/<int:item_id>/mark-used-up")
-def mark_used_up_route(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    item = mark_used_up(item)
-    wants_json = (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or request.accept_mimetypes.best == "application/json"
-    )
-    if wants_json:
-        return jsonify({"ok": True, "item_id": item.id, "used_up": True})
-    return redirect(request.referrer or url_for("main.index", view="usedup"))
-
-
-@bp.post("/item/<int:item_id>/delete")
-def delete(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    item.deleted_at = datetime.utcnow()
-    item.touch()
-    db.session.commit()
-    flash(f"已移入回收站：{item.name}", "warning")
-
-    ref = request.referrer
-    if ref:
-        try:
-            parsed = urlparse(ref)
-            qs = parse_qs(parsed.query)
-            view = (qs.get("view") or ["all"])[0] or "all"
-            return redirect(url_for("main.index", view=view))
-        except Exception:
-            pass
-    return redirect(url_for("main.index"))
-
-
-@bp.post("/item/<int:item_id>/restore")
-@admin_required
-def restore(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    item.deleted_at = None
-    item.touch()
-    db.session.commit()
-    flash(f"已恢复：{item.name}", "success")
-    return redirect(request.referrer or url_for("main.index", view="trash"))
-
-
-@bp.post("/item/<int:item_id>/use-up")
-def use_up_route(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    item = use_up(item)
-    flash(f"已标记用完：{item.name}", "warning")
-    return redirect(request.referrer or url_for("main.index"))
+bp = Blueprint("items_api", __name__)
 
 
 @bp.get("/api/suggest")
@@ -235,6 +179,12 @@ def api_items_add_one():
     location = (payload.get("location") or "冰箱").strip() or "冰箱"
     unit = (payload.get("unit") or "份").strip() or "份"
     note = (payload.get("note") or "").strip()
+    shelf_life_days = payload.get("shelf_life_days")
+    try:
+        shelf_life_days_int = int(shelf_life_days) if shelf_life_days not in (None, "", "null") else None
+    except Exception:
+        shelf_life_days_int = None
+
     item = Item(
         name=name,
         category=category,
@@ -242,56 +192,10 @@ def api_items_add_one():
         unit=unit,
         location=location,
         note=note,
+        shelf_life_days=shelf_life_days_int,
     )
     item.touch()
     db.session.add(item)
     db.session.commit()
     return jsonify({"ok": True, "item_id": item.id})
-
-
-@bp.post("/api/items/batch-add")
-def api_items_batch_add():
-    payload = request.get_json(silent=True) or {}
-    items = payload.get("items") if isinstance(payload, dict) else None
-    if not isinstance(items, list):
-        return jsonify({"ok": False, "error": "items 必须是数组"}), 400
-
-    created_ids: list[int] = []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        name = (it.get("name") or "").strip()
-        if not name:
-            continue
-        quantity = safe_int(it.get("quantity"), default=1)
-        if quantity < 0:
-            quantity = 0
-        category = (it.get("category") or "其他").strip() or "其他"
-        location = (it.get("location") or "冰箱").strip() or "冰箱"
-        unit = (it.get("unit") or "份").strip() or "份"
-        note = (it.get("note") or "").strip()
-        obj = Item(
-            name=name,
-            category=category,
-            quantity=float(quantity),
-            unit=unit,
-            location=location,
-            note=note,
-        )
-        obj.touch()
-        db.session.add(obj)
-        db.session.flush()
-        created_ids.append(obj.id)
-
-    db.session.commit()
-    return jsonify({"ok": True, "created": created_ids})
-
-
-@bp.post("/api/items/<int:item_id>/delete-json")
-def api_items_delete_json(item_id: int):
-    item = Item.query.get_or_404(item_id)
-    item.deleted_at = datetime.utcnow()
-    item.touch()
-    db.session.commit()
-    return jsonify({"ok": True, "item_id": item_id, "deleted": True})
 
