@@ -2,7 +2,7 @@
 {% block title %}新增 - 小仓屋{% endblock %}
 
 {% block content %}
-  <div class="card">
+  <div class="card" data-ai-text-enabled="{{ 1 if ai_text_enabled else 0 }}">
     <div class="card-body p-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -339,6 +339,8 @@
 
   <script>
     (function () {
+      const rootCard = document.querySelector('[data-ai-text-enabled]');
+      const AI_TEXT_ENABLED = rootCard ? rootCard.getAttribute("data-ai-text-enabled") === "1" : false;
       // Shared toast helper
       function toast(msg, kind) {
         const el = document.createElement("div");
@@ -710,12 +712,26 @@
       const aiTextInput = document.getElementById("aiTextInput");
       const aiTextParseBtn = document.getElementById("aiTextParseBtn");
       const aiTextClearBtn = document.getElementById("aiTextClearBtn");
+      let aiTextAbort = null;
       aiTextParseBtn && aiTextParseBtn.addEventListener("click", async () => {
         const text = (aiTextInput && aiTextInput.value ? aiTextInput.value : "").trim();
         if (!text) {
           toast("请输入要解析的文本", "warning");
           return;
         }
+        if (!AI_TEXT_ENABLED) {
+          toast("AI 未配置：请先在“设置 → 安全设置”中配置 VOLCENGINE_API_KEY 并启用 AI。", "danger");
+          return;
+        }
+        if (aiTextAbort) {
+          try { aiTextAbort.abort(); } catch (e) {}
+          aiTextAbort = null;
+        }
+        const controller = ("AbortController" in window) ? new AbortController() : null;
+        aiTextAbort = controller;
+        const timeoutId = controller ? window.setTimeout(() => {
+          try { controller.abort(); } catch (e) {}
+        }, 25000) : null;
         const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
         // 临时调整提示文案为“解析文本”
         if (aiModalEl) {
@@ -731,6 +747,7 @@
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify({ text }),
+            signal: controller ? controller.signal : undefined,
           });
           const data = await r.json().catch(() => ({}));
           if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "解析失败");
@@ -743,8 +760,14 @@
           aiTextPanel && aiTextPanel.setPending(list);
           toast(`成功识别到 ${list.length} 项`, "success");
         } catch (e) {
-          toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+          if (e && e.name === "AbortError") {
+            toast("AI 文本解析请求超时或已取消，请稍后重试。", "warning");
+          } else {
+            toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+          }
         } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+          aiTextAbort = null;
           aiTextParseBtn.disabled = false;
           try { modal?.hide(); } catch (e) {}
         }

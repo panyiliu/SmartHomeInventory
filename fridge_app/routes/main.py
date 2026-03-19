@@ -15,6 +15,7 @@ from ..services.settings_service import (
     get_location_short_label_map,
     get_setting,
     parse_option_list,
+    get_secret_setting,
 )
 
 
@@ -137,11 +138,14 @@ def add():
             flash(f"已添加：{name}", "success")
             return redirect(url_for("main.index"))
 
+    ai_text_enabled = bool(get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY"))
+
     return render_template(
         "add.html",
         today=today_str,
         category_options=category_opts,
         location_options=location_opts,
+        ai_text_enabled=ai_text_enabled,
     )
 
 
