@@ -9,6 +9,57 @@ from ..extensions import db
 from ..models import Setting
 
 
+DEFAULT_CATEGORY_ICON_MAP: dict[str, str] = {
+    "蔬菜": "emoji:🥬",
+    "水果": "emoji:🍎",
+    "肉类": "emoji:🥩",
+    "海鲜": "emoji:🦐",
+    "蛋奶": "emoji:🥚",
+    "主食": "emoji:🍚",
+    "调料": "emoji:🧂",
+    "饮料": "emoji:🥤",
+    "零食": "emoji:🍪",
+    "日用品": "emoji:🧻",
+    "其他": "emoji:📦",
+}
+
+DEFAULT_LOCATION_ICON_MAP: dict[str, str] = {
+    "冰箱": "emoji:🧊",
+    "冷藏": "emoji:🧊",
+    "冷冻": "emoji:🧊",
+    "常温": "emoji:🌡️",
+    "橱柜": "emoji:🗄️",
+    "厨房": "emoji:🍳",
+    "室外": "emoji:🌤️",
+    "卫生间": "emoji:🚻",
+}
+
+DEFAULT_CATEGORY_SHORT_LABEL_MAP: dict[str, str] = {
+    "蔬菜": "菜",
+    "水果": "果",
+    "肉类": "肉",
+    "海鲜": "海",
+    "蛋奶": "蛋",
+    "主食": "食",
+    "调料": "料",
+    "饮料": "饮",
+    "零食": "零",
+    "日用品": "日",
+    "其他": "其",
+}
+
+DEFAULT_LOCATION_SHORT_LABEL_MAP: dict[str, str] = {
+    "冰箱": "冰",
+    "冷藏": "藏",
+    "冷冻": "冻",
+    "常温": "温",
+    "橱柜": "柜",
+    "厨房": "厨",
+    "室外": "外",
+    "卫生间": "卫",
+}
+
+
 def get_setting(key: str, default: str = "") -> str:
     row = db.session.get(Setting, key)
     return row.value if row else default
@@ -155,7 +206,7 @@ def normalize_icon_spec(spec: str | None) -> dict:
 
 def get_category_icon_map_normalized() -> dict[str, dict]:
     raw = get_setting("category_icon_map_json", "")
-    obj = parse_json_object(raw, default={})
+    obj = parse_json_object(raw, default=DEFAULT_CATEGORY_ICON_MAP)
     out: dict[str, dict] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -167,7 +218,7 @@ def get_category_icon_map_normalized() -> dict[str, dict]:
 
 def get_location_icon_map_normalized() -> dict[str, dict]:
     raw = get_setting("location_icon_map_json", "")
-    obj = parse_json_object(raw, default={})
+    obj = parse_json_object(raw, default=DEFAULT_LOCATION_ICON_MAP)
     out: dict[str, dict] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -179,7 +230,7 @@ def get_location_icon_map_normalized() -> dict[str, dict]:
 
 def get_category_short_label_map() -> dict[str, str]:
     raw = get_setting("category_label_map_json", "")
-    obj = parse_json_object(raw, default={})
+    obj = parse_json_object(raw, default=DEFAULT_CATEGORY_SHORT_LABEL_MAP)
     out: dict[str, str] = {}
     for k, v in obj.items():
         key = str(k).strip()
@@ -191,7 +242,7 @@ def get_category_short_label_map() -> dict[str, str]:
 
 def get_location_short_label_map() -> dict[str, str]:
     raw = get_setting("location_label_map_json", "")
-    obj = parse_json_object(raw, default={})
+    obj = parse_json_object(raw, default=DEFAULT_LOCATION_SHORT_LABEL_MAP)
     out: dict[str, str] = {}
     for k, v in obj.items():
         key = str(k).strip()
