@@ -806,6 +806,9 @@
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
     (function () {
+      // Legacy duplicated script block (kept for history). Disabled to avoid double-submit
+      // and duplicate item creation on manual add / AI add flows.
+      return;
       const aiBtn = document.getElementById("aiRecognizeBtn2");
       const aiInput = document.getElementById("aiImageInput");
       const aiModalEl = document.getElementById("aiModal");
