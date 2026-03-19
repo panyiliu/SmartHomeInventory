@@ -29,6 +29,8 @@ def ensure_schema(db: SQLAlchemy) -> None:
         db.session.execute(db.text("ALTER TABLE items ADD COLUMN quick_step FLOAT"))
     if "barcode" not in cols:
         db.session.execute(db.text("ALTER TABLE items ADD COLUMN barcode VARCHAR(64)"))
+    if "deleted_at" not in cols:
+        db.session.execute(db.text("ALTER TABLE items ADD COLUMN deleted_at DATETIME"))
 
     # ai_models table lightweight migration (new columns)
     try:

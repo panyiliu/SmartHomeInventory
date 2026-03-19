@@ -29,6 +29,7 @@ from ..services.settings_service import (
 from ..models import AiModel
 from ..models import AiPromptTemplate
 from ..utils.ai_parse import extract_output_text
+from ..utils.auth import admin_required
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -44,6 +45,7 @@ def _mask_tail(v: str, *, keep: int = 3) -> str:
 
 
 @bp.get("/settings")
+@admin_required
 def admin_settings():
     default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "其他"]
     default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
@@ -151,6 +153,7 @@ def admin_settings():
 
 
 @bp.post("/settings/general")
+@admin_required
 def settings_save_general():
     set_setting("expiring_soon_days", (request.form.get("expiring_soon_days") or "3").strip())
     flash("基础设置已保存。", "success")
@@ -158,6 +161,7 @@ def settings_save_general():
 
 
 @bp.post("/settings/data")
+@admin_required
 def settings_save_data():
     # options stored as JSON arrays
     cat_raw = (request.form.get("category_options") or "").strip()
@@ -199,6 +203,7 @@ def settings_save_data():
 
 
 @bp.post("/settings/notify")
+@admin_required
 def settings_save_notify():
     set_setting("notify_enabled", "1" if (request.form.get("notify_enabled") or "") == "1" else "0")
     set_setting("ai_enabled", "1" if (request.form.get("ai_enabled") or "") == "1" else "0")
@@ -213,12 +218,14 @@ def settings_save_notify():
 
 
 @bp.post("/settings/integrations")
+@admin_required
 def settings_save_integrations():
     set_setting("barcode_app_id", (request.form.get("barcode_app_id") or "").strip())
     flash("集成配置已保存。", "success")
     return redirect(url_for("admin.admin_settings", _anchor="sec-integrations"))
 
 @bp.post("/settings/security")
+@admin_required
 def settings_save_security():
     new_ark_key = (request.form.get("volcengine_api_key") or "").strip()
     if new_ark_key:
@@ -237,6 +244,7 @@ def settings_save_security():
 
 
 @bp.post("/settings/ai")
+@admin_required
 def settings_save_ai():
     vision_active = (request.form.get("ark_active_profile_vision") or request.form.get("ark_active_profile") or "default").strip()
     text_active = (request.form.get("ark_active_profile_text") or request.form.get("ark_active_profile") or "default").strip()
@@ -287,6 +295,7 @@ def settings_save_ai():
 
 
 @bp.post("/settings/ai-engines")
+@admin_required
 def settings_save_ai_engines():
     set_setting("ai_engine_vision_model_id", (request.form.get("ai_engine_vision_model_id") or "").strip())
     set_setting("ai_engine_text_model_id", (request.form.get("ai_engine_text_model_id") or "").strip())
@@ -334,6 +343,7 @@ def _strip_empty_image_blocks(obj: Any) -> Any:
 
 
 @bp.post("/api/ai-engine/test")
+@admin_required
 def api_ai_engine_test():
     """
     Quick connectivity test for selected AiModel engine.
@@ -435,6 +445,7 @@ def api_ai_engine_test():
 
 
 @bp.post("/api/secret/reveal")
+@admin_required
 def api_secret_reveal():
     """
     Temporary reveal of secrets for troubleshooting.
@@ -462,12 +473,14 @@ def api_secret_reveal():
 
 # Backward-compatible endpoint (kept, but UI no longer posts here)
 @bp.post("/settings")
+@admin_required
 def admin_settings_save():
     flash("设置页已升级为“分模块保存”。请在对应模块内点击保存按钮。", "warning")
     return redirect(url_for("admin.admin_settings"))
 
 
 @bp.post("/send-digest")
+@admin_required
 def admin_send_digest():
     expiring_soon_days = get_int_setting("expiring_soon_days", 3)
     now = datetime.utcnow()
@@ -523,6 +536,7 @@ def admin_send_digest():
 
 
 @bp.get("/email-history")
+@admin_required
 def admin_email_history():
     logs = EmailLog.query.order_by(EmailLog.id.desc()).limit(50).all()
     return render_template("admin_email_history.html", logs=logs)

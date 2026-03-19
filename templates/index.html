@@ -8,6 +8,9 @@
     <a class="btn btn-sm {% if view == 'expiring' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expiring') }}">临期</a>
     <a class="btn btn-sm {% if view == 'expired' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expired') }}">过期</a>
     <a class="btn btn-sm {% if view == 'usedup' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='usedup') }}">用完</a>
+    {% if current_user and current_user.is_admin() %}
+      <a class="btn btn-sm {% if view == 'trash' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='trash') }}">回收站</a>
+    {% endif %}
   </div>
 
   <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastArea"></div>
@@ -303,11 +306,19 @@
                               disabled>
                         确定
                       </button>
-                      <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认删除：{{ item.name }}？');">
-                        <button class="btn btn-outline-danger tap-btn mini-action-btn" type="submit" aria-label="删除">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </form>
+                      {% if view == 'trash' %}
+                        <form method="post" action="{{ url_for('items.restore', item_id=item.id) }}" onsubmit="return confirm('确认恢复：{{ item.name }}？');">
+                          <button class="btn btn-outline-success tap-btn mini-action-btn" type="submit" aria-label="恢复">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                          </button>
+                        </form>
+                      {% else %}
+                        <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认移入回收站：{{ item.name }}？');">
+                          <button class="btn btn-outline-danger tap-btn mini-action-btn" type="submit" aria-label="删除">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      {% endif %}
                   </div>
                   {% endif %}
                 </div>
@@ -383,9 +394,15 @@
                             onsubmit="return window.fridgeUseUpConfirm(event);">
                         <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="标记用完">用完</button>
                       </form>
-                      <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认删除：{{ item.name }}？');">
-                        <button class="btn btn-sm btn-danger" type="submit">删除</button>
-                      </form>
+                      {% if view == 'trash' %}
+                        <form method="post" action="{{ url_for('items.restore', item_id=item.id) }}" onsubmit="return confirm('确认恢复：{{ item.name }}？');">
+                          <button class="btn btn-sm btn-outline-success" type="submit">恢复</button>
+                        </form>
+                      {% else %}
+                        <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认移入回收站：{{ item.name }}？');">
+                          <button class="btn btn-sm btn-danger" type="submit">删除</button>
+                        </form>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -1354,7 +1371,7 @@
         if (action === "useup") {
           msg = `确定将 ${ids.length} 个物品标记为已用完吗？`;
         } else if (action === "delete") {
-          msg = `确定要删除这 ${ids.length} 个物品吗？此操作不可恢复。`;
+          msg = `确定要将这 ${ids.length} 个物品移入回收站吗？`;
         }
         if (msg && !window.confirm(msg)) return;
 

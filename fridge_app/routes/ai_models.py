@@ -15,6 +15,7 @@ from ..models import AiModel, AiPromptTemplate
 from ..services.settings_service import get_secret_setting
 from ..utils.ark_config import build_ark_endpoint
 from ..utils.ai_parse import extract_json, extract_output_text
+from ..utils.auth import admin_required
 
 
 bp = Blueprint("ai_models", __name__, url_prefix="/admin")
@@ -125,6 +126,7 @@ def _display_title(m: AiModel, ability: str) -> str:
 
 
 @bp.get("/ai-models")
+@admin_required
 def ai_models_list():
     q = (request.args.get("q") or "").strip()
     api_type = (request.args.get("api_type") or "").strip()
@@ -160,6 +162,7 @@ def ai_models_list():
 
 
 @bp.get("/ai-models/new")
+@admin_required
 def ai_models_new():
     return render_template(
         "ai_model_edit.html",
@@ -169,6 +172,7 @@ def ai_models_new():
 
 
 @bp.route("/ai-models/<int:model_id>/edit", methods=["GET", "POST"])
+@admin_required
 def ai_models_edit(model_id: int):
     row = AiModel.query.get_or_404(model_id)
     if request.method == "GET":
@@ -252,6 +256,7 @@ def ai_models_edit(model_id: int):
 
 
 @bp.route("/ai-models", methods=["POST"])
+@admin_required
 def ai_models_create():
     name = (request.form.get("name") or "").strip()
     display_name = (request.form.get("display_name") or "").strip()
@@ -321,6 +326,7 @@ def ai_models_create():
 
 
 @bp.post("/ai-models/<int:model_id>/delete")
+@admin_required
 def ai_models_delete(model_id: int):
     row = AiModel.query.get_or_404(model_id)
     # UI should confirm; back-end double-check enabled/exists.
@@ -331,6 +337,7 @@ def ai_models_delete(model_id: int):
 
 
 @bp.route("/ai-models/<int:model_id>/test", methods=["GET", "POST"])
+@admin_required
 def ai_models_test(model_id: int):
     row = AiModel.query.get_or_404(model_id)
     prompt_templates = AiPromptTemplate.query.order_by(AiPromptTemplate.category_code, AiPromptTemplate.is_default.desc()).all()

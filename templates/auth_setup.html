@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}初始化 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-7 col-lg-6">
+      <div class="card">
+        <div class="card-body p-4">
+          <h4 class="mb-1 fw-semibold">首次初始化</h4>
+          <div class="text-muted small mb-3">创建管理员账号，用于管理家庭成员与系统设置。</div>
+
+          <form method="post" action="{{ url_for('auth.setup_post', next=request.args.get('next') or '') }}" autocomplete="off">
+            <div class="mb-3">
+              <label class="form-label">管理员账号</label>
+              <input class="form-control" name="username" required minlength="3" autocomplete="username" />
+              <div class="form-text">建议使用英文/数字组合（至少 3 位）。</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">管理员密码</label>
+              <input class="form-control" type="password" name="password" required minlength="8" autocomplete="new-password" />
+              <div class="form-text">至少 8 位，建议包含大小写/数字。</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">确认密码</label>
+              <input class="form-control" type="password" name="password2" required minlength="8" autocomplete="new-password" />
+            </div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary" type="submit"><i class="bi bi-shield-check me-1"></i>创建管理员并进入系统</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

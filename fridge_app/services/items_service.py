@@ -24,6 +24,10 @@ def list_items(
         like = f"%{q}%"
         query = query.filter(or_(Item.name.ilike(like), Item.note.ilike(like), Item.unit.ilike(like)))
 
+    # Soft delete: hide deleted items by default.
+    if view != "trash":
+        query = query.filter(Item.deleted_at.is_(None))
+
     base_items = query.order_by(Item.created_at.desc(), Item.id.desc()).all()
     now = datetime.utcnow()
 
@@ -39,6 +43,8 @@ def list_items(
 
     def view_match(it: Item) -> bool:
         remain = it.remaining_days(now=now)
+        if view == "trash":
+            return it.deleted_at is not None
         if view == "usedup":
             return bool(it.used_up)
         if bool(it.used_up):

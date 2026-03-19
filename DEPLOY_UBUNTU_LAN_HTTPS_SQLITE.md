@@ -105,6 +105,10 @@ docker compose logs -f --tail=200 web
 
 SQLite 会在：`instance/fridge.db`
 
+首次启动后，请先打开初始化页面创建管理员账号：
+
+- `https://<你的域名或IP>:<端口>/setup`
+
 ---
 
 ## 6) 更新（无 Git）

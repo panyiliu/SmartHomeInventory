@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
 from ..extensions import db
 from ..models import Item
@@ -28,6 +28,11 @@ def index():
     location = (request.args.get("location") or "").strip()
     view = (request.args.get("view") or "all").strip()
     sort = (request.args.get("sort") or "created_desc").strip()
+
+    if view == "trash":
+        u = getattr(g, "current_user", None)
+        if not (u and getattr(u, "is_admin", lambda: False)()):
+            abort(403)
 
     expiring_soon_days = get_int_setting("expiring_soon_days", 3)
     category_icon_map = get_category_icon_map_normalized()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
 from flask import Blueprint, flash, jsonify, redirect, request, url_for
@@ -13,6 +14,7 @@ from ..services.items_service import adjust_quantity, mark_used_up, use_up
 from ..services.settings_service import safe_int
 from ..utils.ai_image import recognize_foods_from_image
 from ..utils.ai_text import extract_items_from_text
+from ..utils.auth import admin_required
 
 
 bp = Blueprint("items", __name__)
@@ -53,9 +55,10 @@ def mark_used_up_route(item_id: int):
 @bp.post("/item/<int:item_id>/delete")
 def delete(item_id: int):
     item = Item.query.get_or_404(item_id)
-    db.session.delete(item)
+    item.deleted_at = datetime.utcnow()
+    item.touch()
     db.session.commit()
-    flash(f"已删除：{item.name}", "warning")
+    flash(f"已移入回收站：{item.name}", "warning")
 
     ref = request.referrer
     if ref:
@@ -67,6 +70,17 @@ def delete(item_id: int):
         except Exception:
             pass
     return redirect(url_for("main.index"))
+
+
+@bp.post("/item/<int:item_id>/restore")
+@admin_required
+def restore(item_id: int):
+    item = Item.query.get_or_404(item_id)
+    item.deleted_at = None
+    item.touch()
+    db.session.commit()
+    flash(f"已恢复：{item.name}", "success")
+    return redirect(request.referrer or url_for("main.index", view="trash"))
 
 
 @bp.post("/item/<int:item_id>/use-up")
@@ -131,7 +145,7 @@ def api_barcode_scan_add():
     if not goods_name:
         return jsonify({"ok": False, "error": "未获取到商品名称。"}), 400
 
-    existing = Item.query.filter(Item.barcode == barcode).order_by(Item.id.desc()).first()
+    existing = Item.query.filter(Item.barcode == barcode, Item.deleted_at.is_(None)).order_by(Item.id.desc()).first()
     if existing:
         existing.quantity = float(existing.quantity) + 1.0
         existing.touch()
@@ -296,7 +310,8 @@ def api_items_batch_add():
 @bp.post("/api/items/<int:item_id>/delete-json")
 def api_items_delete_json(item_id: int):
     item = Item.query.get_or_404(item_id)
-    db.session.delete(item)
+    item.deleted_at = datetime.utcnow()
+    item.touch()
     db.session.commit()
-    return jsonify({"ok": True, "item_id": item_id})
+    return jsonify({"ok": True, "item_id": item_id, "deleted": True})
 

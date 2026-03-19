@@ -5,12 +5,14 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ..extensions import db
 from ..models import AiPromptTemplate
+from ..utils.auth import admin_required
 
 
 bp = Blueprint("ai_prompts", __name__, url_prefix="/admin")
 
 
 @bp.get("/ai-prompts")
+@admin_required
 def ai_prompts_list():
     # group by category_code (simple MVP)
     categories = (
@@ -34,6 +36,7 @@ def ai_prompts_list():
 
 
 @bp.route("/ai-prompts/new", methods=["GET", "POST"])
+@admin_required
 def ai_prompts_new():
     if request.method == "GET":
         return render_template(
@@ -67,6 +70,7 @@ def ai_prompts_new():
 
 
 @bp.route("/ai-prompts/<int:prompt_id>/edit", methods=["GET", "POST"])
+@admin_required
 def ai_prompts_edit(prompt_id: int):
     row = AiPromptTemplate.query.get_or_404(prompt_id)
     if request.method == "GET":
@@ -104,6 +108,7 @@ def ai_prompts_edit(prompt_id: int):
 
 
 @bp.post("/ai-prompts/<int:prompt_id>/delete")
+@admin_required
 def ai_prompts_delete(prompt_id: int):
     row = AiPromptTemplate.query.get_or_404(prompt_id)
     db.session.delete(row)

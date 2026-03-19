@@ -7,10 +7,11 @@ from flask import Flask
 
 from .config import load_config
 from .extensions import db
-from .models import Setting
+from .models import Setting, User
 from .models import AiModel, AiPromptTemplate
 import json
 from .routes.admin import bp as admin_bp
+from .routes.auth import bp as auth_bp
 from .routes.items import bp as items_bp
 from .routes.main import bp as main_bp
 from .routes.recipes import bp as recipes_bp
@@ -478,15 +479,73 @@ def create_app() -> Flask:
         )
         db.session.commit()
 
+    from flask import g, redirect, request, session, url_for
+
+    from .utils.auth import get_or_create_csrf_token, load_current_user, verify_csrf
+    from .utils.rate_limit import check_rate_limit
+
+    @app.before_request
+    def _auth_and_csrf():
+        # Ensure CSRF exists for all sessions.
+        get_or_create_csrf_token()
+
+        # Load current user into g.
+        g.current_user = load_current_user()
+
+        # First-run setup: require creating admin.
+        if User.query.count() == 0:
+            if request.endpoint and request.endpoint.startswith("auth."):
+                return None
+            # allow static
+            if request.endpoint == "static":
+                return None
+            return redirect(url_for("auth.setup_get", next=request.full_path if request.full_path else request.path))
+
+        # Require login for everything except auth endpoints and static.
+        if request.endpoint in {"static"} or (request.endpoint and request.endpoint.startswith("auth.")):
+            return None
+        if g.current_user is None:
+            return redirect(url_for("auth.login", next=request.full_path if request.full_path else request.path))
+
+        # CSRF validation for state-changing methods.
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            # Allow healthcheck from inside container without CSRF header.
+            if request.path == "/" and request.headers.get("User-Agent", "").startswith("Python-urllib"):
+                return None
+            if not verify_csrf():
+                return ("CSRF 校验失败，请刷新页面后重试。", 400)
+
+        # Basic rate limit for sensitive routes (self-host friendly).
+        path = request.path or ""
+        if path.startswith("/api/ai/") or path.startswith("/admin/api/") or path.startswith("/api/barcode/"):
+            ok, retry = check_rate_limit(scope="api_sensitive", limit=60, window_s=60)
+            if not ok:
+                return (f"请求过于频繁，请 {retry}s 后重试。", 429, {"Retry-After": str(retry)})
+
+        return None
+
+    @app.context_processor
+    def _inject_globals():
+        return {
+            "csrf_token": session.get("csrf_token") or "",
+            "current_user": getattr(g, "current_user", None),
+        }
+
     @app.after_request
     def _disable_cache(response):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        # Basic security headers (self-host friendly).
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
         return response
 
     app.register_blueprint(main_bp)
     app.register_blueprint(items_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(recipes_bp)
     app.register_blueprint(ai_models_bp)
