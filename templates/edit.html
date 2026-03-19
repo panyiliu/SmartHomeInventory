@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}编辑 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <a class="text-decoration-none text-muted small" href="{{ next_url or url_for('main.index') }}"><i class="bi bi-arrow-left me-1"></i>返回列表</a>
+          <div class="mt-1">
+            <h4 class="mb-0 fw-semibold">编辑食材</h4>
+            <div class="text-muted small">更新库存信息，让记录更准确。</div>
+          </div>
+        </div>
+      </div>
+
+      <form id="itemForm" method="post" action="{{ url_for('main.edit', item_id=item.id) }}" class="row g-4 has-sticky-actions" autocomplete="off">
+        <input type="hidden" name="next" value="{{ next_url or '' }}" />
+        <div class="col-12 col-md-6">
+          <label class="form-label">名称<span class="req">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-egg-fried"></i></span>
+            <input id="nameInput" class="form-control" name="name" required value="{{ item.name }}" placeholder="例：鸡蛋、牛奶、生抽" list="nameSuggest" />
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">数量<span class="req">*</span></label>
+          <div class="input-group">
+            <button class="btn btn-outline-secondary" type="button" id="qtyMinusBtn"><i class="bi bi-dash-lg"></i></button>
+            <input class="form-control mono text-center" type="number" inputmode="decimal" step="0.01" min="0" name="quantity" id="quantityInput" required value="{{ item.quantity }}" />
+            <button class="btn btn-outline-secondary" type="button" id="qtyPlusBtn"><i class="bi bi-plus-lg"></i></button>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label text-muted">单位</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
+            <input class="form-control" name="unit" value="{{ item.unit }}" list="unitOptions" placeholder="例：个 / 包 / 克 / ml / 瓶" />
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label text-muted">分类</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-tag"></i></span>
+            <input type="hidden" name="category" id="categoryValue" value="{{ item.category }}" />
+            <select class="form-select d-none d-md-block" id="categorySelect">
+              {% for v in category_options %}
+                <option value="{{ v }}" {% if v == item.category %}selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="d-md-none mt-2 chip-row" id="categoryChips">
+            {% for v in category_options %}
+              <button class="chip {% if v == item.category %}active{% endif %}" type="button" data-value="{{ v }}">{{ v }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label text-muted">位置</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-snow2"></i></span>
+            <input type="hidden" name="location" id="locationValue" value="{{ item.location }}" />
+            <select class="form-select d-none d-md-block" id="locationSelect">
+              {% for v in location_options %}
+                <option value="{{ v }}" {% if v == item.location %}selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="d-md-none mt-2 chip-row" id="locationChips">
+            {% for v in location_options %}
+              <button class="chip {% if v == item.location %}active{% endif %}" type="button" data-value="{{ v }}">{{ v }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label text-muted">备注</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
+            <input class="form-control" name="note" value="{{ item.note }}" placeholder="例：保质期、品牌、开封日期" />
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label text-muted">保质期（天）</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
+            <input class="form-control mono" type="number" inputmode="numeric" step="1" min="0" name="shelf_life_days" value="{{ item.shelf_life_days if item.shelf_life_days is not none else '' }}" placeholder="可留空，例如：7 / 30 / 180" />
+          </div>
+          <div class="form-text">从录入当天开始计算“已存放/剩余天数”。</div>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label text-muted">入库日期</label>
+          <div class="input-group">
+            <span class="input-group-text" aria-hidden="true"><i class="bi bi-calendar-event"></i></span>
+            <input class="form-control" type="date" name="record_date" value="{{ item.created_at.date().isoformat() }}" />
+          </div>
+          <div class="form-text">用于计算“已存放/剩余天数”。</div>
+        </div>
+
+        {# 快捷步长已移除（编辑页简化） #}
+
+        <datalist id="unitOptions">
+          <option value="个"></option>
+          <option value="盒"></option>
+          <option value="包"></option>
+          <option value="袋"></option>
+          <option value="瓶"></option>
+          <option value="罐"></option>
+          <option value="克"></option>
+          <option value="千克"></option>
+          <option value="ml"></option>
+          <option value="L"></option>
+          <option value="份"></option>
+        </datalist>
+        <!-- category_options/location_options now come from settings -->
+        <datalist id="nameSuggest"></datalist>
+
+        <div class="col-12 sticky-actions">
+          <div class="d-flex flex-column flex-md-row gap-3">
+          <button id="submitBtn" class="btn btn-primary" type="submit">
+            <span class="btn-label"><i class="bi bi-check2-circle me-1"></i>保存</span>
+            <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>保存中...</span>
+          </button>
+          <a class="btn btn-outline-secondary" href="{{ next_url or url_for('main.index') }}"><i class="bi bi-x-circle me-1"></i>取消</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Prevent double submit + show loading state.
+    (function () {
+      const form = document.getElementById("itemForm");
+      const btn = document.getElementById("submitBtn");
+      if (!form || !btn) return;
+      form.addEventListener("submit", () => {
+        btn.disabled = true;
+        btn.querySelector(".btn-label")?.classList.add("d-none");
+        btn.querySelector(".btn-loading")?.classList.remove("d-none");
+      });
+    })();
+  </script>
+
+  <script>
+    // 数量加减按钮逻辑（编辑页）
+    (function () {
+      const qtyInput = document.getElementById("quantityInput");
+      const minusBtn = document.getElementById("qtyMinusBtn");
+      const plusBtn = document.getElementById("qtyPlusBtn");
+      if (!qtyInput || !minusBtn || !plusBtn) return;
+
+      function parseVal() {
+        const v = parseFloat(qtyInput.value || "0");
+        return isNaN(v) ? 0 : v;
+      }
+
+      const STEP = 1;
+
+      minusBtn.addEventListener("click", () => {
+        let v = parseVal();
+        v = Math.max(0, v - STEP);
+        qtyInput.value = v.toString();
+      });
+
+      plusBtn.addEventListener("click", () => {
+        let v = parseVal();
+        v = v + STEP;
+        qtyInput.value = v.toString();
+      });
+    })();
+  </script>
+
+  <script>
+    // Mobile pills for category/location (sync to hidden inputs + desktop selects)
+    (function () {
+      const catValue = document.getElementById("categoryValue");
+      const locValue = document.getElementById("locationValue");
+      const catSelect = document.getElementById("categorySelect");
+      const locSelect = document.getElementById("locationSelect");
+      const catChips = document.getElementById("categoryChips");
+      const locChips = document.getElementById("locationChips");
+
+      function setActive(container, v) {
+        if (!container) return;
+        container.querySelectorAll(".chip").forEach((b) => {
+          if (b.getAttribute("data-value") === v) b.classList.add("active");
+          else b.classList.remove("active");
+        });
+      }
+
+      function setCategory(v) {
+        if (catValue) catValue.value = v;
+        if (catSelect) catSelect.value = v;
+        setActive(catChips, v);
+      }
+
+      function setLocation(v) {
+        if (locValue) locValue.value = v;
+        if (locSelect) locSelect.value = v;
+        setActive(locChips, v);
+      }
+
+      if (catSelect) setCategory(catSelect.value || (catValue ? catValue.value : ""));
+      if (locSelect) setLocation(locSelect.value || (locValue ? locValue.value : ""));
+
+      if (catSelect) catSelect.addEventListener("change", () => setCategory(catSelect.value));
+      if (locSelect) locSelect.addEventListener("change", () => setLocation(locSelect.value));
+
+      if (catChips) catChips.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chip");
+        if (!btn) return;
+        setCategory(btn.getAttribute("data-value") || "");
+      });
+      if (locChips) locChips.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chip");
+        if (!btn) return;
+        setLocation(btn.getAttribute("data-value") || "");
+      });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      const nameInput = document.getElementById("nameInput");
+      const nameSuggest = document.getElementById("nameSuggest");
+      if (!nameInput || !nameSuggest) return;
+
+      let last = [];
+      let t = null;
+
+      async function fetchSuggest(q) {
+        const r = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
+        return await r.json();
+      }
+
+      function fillFrom(item) {
+        const setVal = (name, v) => {
+          const el = document.querySelector(`[name="${name}"]`);
+          if (el && el.value === "") el.value = v ?? el.value;
+        };
+        setVal("category", item.category);
+        setVal("unit", item.unit);
+        setVal("location", item.location);
+        if (item.shelf_life_days !== null && item.shelf_life_days !== undefined) {
+          const el = document.querySelector(`[name="shelf_life_days"]`);
+          if (el && el.value === "") el.value = item.shelf_life_days;
+        }
+        if (item.quick_step !== null && item.quick_step !== undefined) {
+          const el = document.querySelector(`[name="quick_step"]`);
+          if (el && el.value === "") el.value = item.quick_step;
+        }
+      }
+
+      nameInput.addEventListener("input", () => {
+        const q = nameInput.value.trim();
+        if (t) window.clearTimeout(t);
+        if (!q) return;
+        t = window.setTimeout(async () => {
+          last = await fetchSuggest(q);
+          nameSuggest.innerHTML = last.map((x) => `<option value="${x.name}"></option>`).join("");
+        }, 150);
+      });
+
+      nameInput.addEventListener("change", () => {
+        const v = nameInput.value.trim();
+        const hit = last.find((x) => x.name === v);
+        if (hit) fillFrom(hit);
+      });
+    })();
+  </script>
+{% endblock %}

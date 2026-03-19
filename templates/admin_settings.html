@@ -1,0 +1,812 @@
+{% extends "base.html" %}
+{% block title %}设置 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+          <h4 class="mb-1 fw-semibold">设置</h4>
+          <div class="text-muted small">按模块管理：一次只编辑一个模块，降低误操作。</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-primary btn-badge" href="{{ url_for('admin.admin_email_history') }}">
+            <i class="bi bi-clock-history me-1"></i>发送历史
+            {% if email_history_count %}
+              <span class="count">{{ email_history_count }}</span>
+            {% endif %}
+          </a>
+          <form method="post" action="{{ url_for('admin.admin_send_digest') }}">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>立即发送提醒</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <!-- Desktop left navigation -->
+        <div class="col-12 col-lg-3 d-none d-lg-block">
+          <div id="settingsNavDesktop" class="list-group">
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center active" type="button" data-module-link="sec-general">
+              <span>⚙️ 基础设置</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-general">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-notify">
+              <span>📧 通知设置</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-notify">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-ai">
+              <span>🤖 AI 设置</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-ai">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-integrations">
+              <span>🔗 集成与 API</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-integrations">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data">
+              <span>🗂 数据与选项</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-data">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-security">
+              <span>🔐 安全设置（高风险）</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-security">未保存</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile: list -> sub page -->
+        <div class="col-12 d-lg-none">
+          <div id="settingsNavMobileList" class="list-group">
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-general">
+              <span>⚙️ 基础设置</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-notify">
+              <span>📧 通知设置</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-ai">
+              <span>🤖 AI 设置</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-integrations">
+              <span>🔗 集成与 API</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data">
+              <span>🗂 数据与选项</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-security">
+              <span>🔐 安全设置（高风险）</span><i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right content: single module visible -->
+        <div class="col-12 col-lg-9">
+          <div id="settingsMobileHeader" class="d-lg-none d-none mb-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="btnMobileBack"><i class="bi bi-chevron-left me-1"></i>返回</button>
+            <span class="ms-2 text-muted small" id="mobileModuleTitle"></span>
+          </div>
+
+          <!-- 基础设置 -->
+          <div class="card" data-module="sec-general">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+              </div>
+              <hr class="my-3"/>
+
+              <form method="post" action="{{ url_for('admin.settings_save_general') }}" autocomplete="off" data-module-form="sec-general">
+                <div class="row g-3 align-items-center">
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4">
+                        <label class="form-label mb-0">临期阈值（天）</label>
+                      </div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control mono" type="number" step="1" min="0" name="expiring_soon_days" value="{{ expiring_soon_days }}" placeholder="例如：3" />
+                        <div class="form-text">剩余天数 ≤ 阈值 时，标记为“临期”。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>保存基础设置</button>
+                  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- 通知设置 -->
+          <div class="card d-none" data-module="sec-notify">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+              </div>
+              <hr class="my-3"/>
+
+              <form method="post" action="{{ url_for('admin.settings_save_notify') }}" autocomplete="off" data-module-form="sec-notify">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">SMTP 服务器</label></div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control" name="smtp_host" value="{{ smtp_host }}" placeholder="例如：smtp.qq.com" />
+                        <div class="form-text">邮件服务地址（例如 QQ/163/企业邮箱）。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">端口</label></div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control mono" type="number" name="smtp_port" value="{{ smtp_port }}" placeholder="例如：465" />
+                        <div class="form-text">常见：SSL 465 / STARTTLS 587。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">连接方式</label></div>
+                      <div class="col-12 col-md-8">
+                        <select class="form-select" name="smtp_ssl">
+                          <option value="1" {% if smtp_ssl != '0' %}selected{% endif %}>SSL（推荐）</option>
+                          <option value="0" {% if smtp_ssl == '0' %}selected{% endif %}>STARTTLS</option>
+                        </select>
+                        <div class="form-text">与端口配套选择。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">发件人账号</label></div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control" name="smtp_user" value="{{ smtp_user }}" placeholder="例如：xxx@qq.com" />
+                        <div class="form-text">通常为完整邮箱地址。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">收件人列表</label></div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control" name="smtp_to" value="{{ smtp_to }}" placeholder="例如：a@xx.com, b@xx.com" />
+                        <div class="form-text">支持逗号 / 分号 / 换行分隔。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>保存通知设置</button>
+                  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- AI 设置 -->
+          <div class="card d-none" data-module="sec-ai">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="mb-0">🤖 AI 设置</h5>
+                </div>
+                <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+              </div>
+              <hr class="my-3"/>
+
+              <div class="row g-3">
+                <div class="col-12">
+                  <div class="p-3 rounded-4 border bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div class="fw-semibold">状态</div>
+                      <div class="{% if ark_key_is_set %}text-success{% else %}text-danger{% endif %} fw-semibold">
+                        {% if ark_key_is_set %}已启用{% else %}未配置{% endif %}
+                      </div>
+                    </div>
+
+                    <div class="text-muted small mt-2">
+                      vision：
+                      {% if engine_vision %}
+                        <code>{{ engine_vision.display_name or engine_vision.name }}</code>（{{ engine_vision.api_type }} / {{ engine_vision.model_name }}）
+                      {% else %}
+                        <code>{{ ark_vision_active_profile_name }}</code>（{{ ark_vision_active_api_type }} / {{ ark_vision_active_model }}）
+                      {% endif %}
+                      <br/>
+                      text：
+                      {% if engine_text %}
+                        <code>{{ engine_text.display_name or engine_text.name }}</code>（{{ engine_text.api_type }} / {{ engine_text.model_name }}）
+                      {% else %}
+                        <code>{{ ark_text_active_profile_name }}</code>（{{ ark_text_active_api_type }} / {{ ark_text_active_model }}）
+                      {% endif %}
+                      <br/>
+                      recipes：
+                      {% if engine_recipes %}
+                        <code>{{ engine_recipes.display_name or engine_recipes.name }}</code>（{{ engine_recipes.api_type }} / {{ engine_recipes.model_name }}）
+                      {% else %}
+                        <code>{{ ark_recipes_active_profile_name }}</code>（{{ ark_recipes_active_api_type }} / {{ ark_recipes_active_model }}）
+                      {% endif %}
+                    </div>
+
+                    <div class="text-muted small d-flex align-items-center gap-1 mt-2">
+                      <span>密钥：{% if ark_key_is_set %}已配置{% else %}未配置{% endif %}</span>
+                      <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="tooltip" data-bs-placement="top" title="💡 推荐使用环境变量（更安全）：VOLCENGINE_API_KEY">
+                        <i class="bi bi-info-circle"></i>
+                      </button>
+                    </div>
+
+                    <div class="mt-3">
+                      <button class="btn btn-sm btn-outline-primary" type="button" data-module-link="sec-security">去安全设置管理密钥</button>
+                    <a class="btn btn-sm btn-outline-success ms-2" href="{{ url_for('ai_models.ai_models_list') }}">
+                      AI 模型管理
+                    </a>
+                    <a class="btn btn-sm btn-outline-success ms-2" href="{{ url_for('ai_prompts.ai_prompts_list') }}">
+                      提示词模板管理
+                    </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <form method="post" action="{{ url_for('admin.settings_save_ai_engines') }}" autocomplete="off" data-module-form="sec-ai">
+                  <div class="row g-3 align-items-start">
+                    <div class="col-12">
+                      <h6 class="mb-1">按能力选择引擎（推荐）</h6>
+                      <div class="text-muted small">这里选的是“AI 模型管理”里的引擎（支持友好显示名）。</div>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label mb-0">图片识别</label>
+                      <div class="d-flex gap-2 mt-2 align-items-center">
+                        <select class="form-select" name="ai_engine_vision_model_id" data-engine-select="vision">
+                          <option value="" {% if not ai_engine_vision_id %}selected{% endif %}>（不指定）</option>
+                          {% for e in vision_engines %}
+                            <option value="{{ e.id }}" {% if ai_engine_vision_id == (e.id|string) %}selected{% endif %}>
+                              {{ e.display_name or e.name }} — {{ e.api_type }} / {{ e.model_name }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-success btn-sm" type="button" data-engine-test="vision">测试</button>
+                        <span class="small text-muted" data-engine-test-result="vision"></span>
+                      </div>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label mb-0">文本解析</label>
+                      <div class="d-flex gap-2 mt-2 align-items-center">
+                        <select class="form-select" name="ai_engine_text_model_id" data-engine-select="text">
+                          <option value="" {% if not ai_engine_text_id %}selected{% endif %}>（不指定）</option>
+                          {% for e in text_engines %}
+                            <option value="{{ e.id }}" {% if ai_engine_text_id == (e.id|string) %}selected{% endif %}>
+                              {{ e.display_name or e.name }} — {{ e.api_type }} / {{ e.model_name }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-success btn-sm" type="button" data-engine-test="text">测试</button>
+                        <span class="small text-muted" data-engine-test-result="text"></span>
+                      </div>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label mb-0">菜谱生成</label>
+                      <div class="d-flex gap-2 mt-2 align-items-center">
+                        <select class="form-select" name="ai_engine_recipes_model_id" data-engine-select="recipes">
+                          <option value="" {% if not ai_engine_recipes_id %}selected{% endif %}>（不指定）</option>
+                          {% for e in recipes_engines %}
+                            <option value="{{ e.id }}" {% if ai_engine_recipes_id == (e.id|string) %}selected{% endif %}>
+                              {{ e.display_name or e.name }} — {{ e.api_type }} / {{ e.model_name }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-success btn-sm" type="button" data-engine-test="recipes">测试</button>
+                        <span class="small text-muted" data-engine-test-result="recipes"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>保存能力引擎选择</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- 集成与 API -->
+          <div class="card d-none" data-module="sec-integrations">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="mb-0">🔗 集成与 API</h5>
+                  <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+                </div>
+              </div>
+              <hr class="my-3"/>
+
+              <form method="post" action="{{ url_for('admin.settings_save_integrations') }}" autocomplete="off" data-module-form="sec-integrations">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">条码服务（mxnzp）APP_ID</label></div>
+                      <div class="col-12 col-md-8">
+                        <input class="form-control" name="barcode_app_id" value="{{ barcode_app_id }}" placeholder="例如：kqohtxkgufkrlagv" />
+                        <div class="form-text">用于条码识别接口鉴权。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-center">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">条码服务 APP_SECRET</label></div>
+                      <div class="col-12 col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge {% if barcode_secret_is_set %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                            {% if barcode_secret_is_set %}已设置{% else %}未设置{% endif %}
+                          </span>
+                          <button class="btn btn-sm btn-outline-primary" type="button" data-module-link="sec-security">去安全设置修改</button>
+                          <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="tooltip" data-bs-placement="top" title="💡 推荐使用环境变量（更安全）：FRIDGE_BARCODE_APP_SECRET">
+                            <i class="bi bi-info-circle"></i>
+                          </button>
+                        </div>
+                        <div class="form-text">为避免泄露，密钥仅在“安全设置”中可修改。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>保存集成配置</button>
+                  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- 数据与选项 -->
+          <div class="card d-none" data-module="sec-data">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="mb-0">🗂 数据与选项</h5>
+                  <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+                </div>
+              </div>
+              <hr class="my-3"/>
+
+              <form method="post" action="{{ url_for('admin.settings_save_data') }}" autocomplete="off" data-module-form="sec-data">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类选项</label></div>
+                      <div class="col-12 col-md-8">
+                        <input type="hidden" name="category_options" id="categoryOptionsRaw" value="{{ category_options_json }}" />
+                        <div class="border rounded-4 p-2 bg-white" data-tag-editor data-target="#categoryOptionsRaw">
+                          <div class="d-flex flex-wrap gap-2 align-items-center" data-tags></div>
+                          <div class="mt-2">
+                            <input class="form-control" data-tag-input placeholder="输入分类后回车添加（例：蔬菜）" />
+                          </div>
+                        </div>
+                        <div class="form-text">将以“列表”形式保存（不是逗号拼接字符串）。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置选项</label></div>
+                      <div class="col-12 col-md-8">
+                        <input type="hidden" name="location_options" id="locationOptionsRaw" value="{{ location_options_json }}" />
+                        <div class="border rounded-4 p-2 bg-white" data-tag-editor data-target="#locationOptionsRaw">
+                          <div class="d-flex flex-wrap gap-2 align-items-center" data-tags></div>
+                          <div class="mt-2">
+                            <input class="form-control" data-tag-input placeholder="输入位置后回车添加（例：冰箱）" />
+                          </div>
+                        </div>
+                        <div class="form-text">前端录入会展示为下拉可选项。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <hr class="my-2"/>
+                    <div class="text-muted small">图标/短标签映射使用 JSON 对象：键为“分类/位置名称”，值为图标/短标签。</div>
+                    <div class="text-muted small mt-1">图标值支持：<code>emoji:🥬</code> / <code>bi:trash</code> / <code>svg:depleted</code>（也支持直接填 emoji）。</div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类图标映射</label></div>
+                      <div class="col-12 col-md-8">
+                        <textarea class="form-control mono" name="category_icon_map_json" rows="6">{{ category_icon_map_json }}</textarea>
+                        <div class="form-text">示例：<code>{"蔬菜":"emoji:🥬","水果":"emoji:🍎","零食":"bi:cookie"}</code></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置图标映射</label></div>
+                      <div class="col-12 col-md-8">
+                        <textarea class="form-control mono" name="location_icon_map_json" rows="6">{{ location_icon_map_json }}</textarea>
+                        <div class="form-text">示例：<code>{"冰箱":"emoji:🧊","橱柜":"emoji:🗄️"}</code></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类短标签（移动端）</label></div>
+                      <div class="col-12 col-md-8">
+                        <textarea class="form-control mono" name="category_label_map_json" rows="5">{{ category_label_map_json }}</textarea>
+                        <div class="form-text">示例：<code>{"蔬菜":"菜","水果":"果","肉类":"肉"}</code>；未配置则默认取首字。</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置短标签（移动端）</label></div>
+                      <div class="col-12 col-md-8">
+                        <textarea class="form-control mono" name="location_label_map_json" rows="5">{{ location_label_map_json }}</textarea>
+                        <div class="form-text">可选；未配置则移动端仍显示完整位置文字。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>保存数据与选项</button>
+                  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- 安全设置 -->
+          <div class="card d-none" data-module="sec-security">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="mb-0">🔐 安全设置（高风险）</h5>
+                  <span class="badge text-bg-danger">高风险</span>
+                  <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+                </div>
+              </div>
+              <hr class="my-3"/>
+
+              <form method="post" action="{{ url_for('admin.settings_save_security') }}" autocomplete="off" data-module-form="sec-security">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="text-muted small">敏感信息不会明文展示，点击“修改”后才可输入。</div>
+                      <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="tooltip" data-bs-placement="top" title="💡 推荐使用环境变量（更安全）：VOLCENGINE_API_KEY / FRIDGE_SMTP_PASSWORD / FRIDGE_BARCODE_APP_SECRET">
+                        <i class="bi bi-info-circle"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">VOLCENGINE_API_KEY（Ark AI）</label></div>
+                      <div class="col-12 col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge {% if ark_key_is_set %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                            {% if ark_key_is_set %}已设置{% else %}未设置{% endif %}
+                          </span>
+                          <button class="btn btn-sm btn-outline-primary" type="button" data-toggle-secret="#editArkKey">修改</button>
+                        </div>
+                        <div id="editArkKey" class="mt-2 d-none">
+                          <input class="form-control" type="password" name="volcengine_api_key" placeholder="输入新的 VOLCENGINE_API_KEY（留空不修改）" disabled />
+                          <div class="form-text">不允许明文展示；仅保存“新值”。</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">SMTP 密码</label></div>
+                      <div class="col-12 col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge {% if password_is_set %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                            {% if password_is_set %}已设置{% else %}未设置{% endif %}
+                          </span>
+                          <button class="btn btn-sm btn-outline-primary" type="button" data-toggle-secret="#editSmtpPwd">修改</button>
+                        </div>
+                        <div id="editSmtpPwd" class="mt-2 d-none">
+                          <input class="form-control" type="password" name="smtp_password" placeholder="输入新的 SMTP 密码（留空不修改）" disabled />
+                          <div class="form-text">建议使用授权码/应用专用密码。</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="row g-2 align-items-start">
+                      <div class="col-12 col-md-4"><label class="form-label mb-0">条码服务 APP_SECRET</label></div>
+                      <div class="col-12 col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge {% if barcode_secret_is_set %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                            {% if barcode_secret_is_set %}已设置{% else %}未设置{% endif %}
+                          </span>
+                          <button class="btn btn-sm btn-outline-primary" type="button" data-toggle-secret="#editBarcodeSecret">修改</button>
+                        </div>
+                        <div id="editBarcodeSecret" class="mt-2 d-none">
+                          <input class="form-control" type="password" name="barcode_app_secret" placeholder="输入新的 APP_SECRET（留空不修改）" disabled />
+                          <div class="form-text">不允许明文展示；仅保存“新值”。</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button class="btn btn-primary" type="submit"><i class="bi bi-shield-check me-1"></i>保存安全设置</button>
+                  <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const moduleOrder = ["sec-general","sec-notify","sec-ai","sec-integrations","sec-data","sec-security"];
+      const dirty = Object.fromEntries(moduleOrder.map((k) => [k, false]));
+      let active = "sec-general";
+
+      function isMobile() {
+        return window.matchMedia && window.matchMedia("(max-width: 991.98px)").matches;
+      }
+
+      function setDirty(moduleId, v) {
+        dirty[moduleId] = !!v;
+        document.querySelectorAll(`[data-dirty-badge="${moduleId}"]`).forEach((el) => el.classList.toggle("d-none", !dirty[moduleId]));
+        document.querySelectorAll(`[data-module="${moduleId}"] [data-unsaved]`).forEach((el) => el.classList.toggle("d-none", !dirty[moduleId]));
+      }
+
+      function anyDirty() {
+        return Object.values(dirty).some(Boolean);
+      }
+
+      function confirmLeaveIfDirty() {
+        if (!dirty[active]) return true;
+        return window.confirm("当前模块有未保存更改，确定要切换吗？");
+      }
+
+      function updateNavActive(moduleId) {
+        document.querySelectorAll("[data-module-link]").forEach((btn) => {
+          const mid = btn.getAttribute("data-module-link");
+          btn.classList.toggle("active", mid === moduleId);
+        });
+      }
+
+      function updateMobileHeader(moduleId) {
+        const map = {
+          "sec-general": "⚙️ 基础设置",
+          "sec-notify": "📧 通知设置",
+          "sec-ai": "🤖 AI 设置",
+          "sec-integrations": "🔗 集成与 API",
+          "sec-data": "🗂 数据与选项",
+          "sec-security": "🔐 安全设置（高风险）",
+        };
+        const title = map[moduleId] || "";
+        const el = document.getElementById("mobileModuleTitle");
+        if (el) el.textContent = title;
+      }
+
+      function showModule(moduleId, { pushHash } = { pushHash: true }) {
+        if (!moduleOrder.includes(moduleId)) moduleId = "sec-general";
+        active = moduleId;
+        localStorage.setItem("settings_active_module", active);
+        if (pushHash) {
+          history.replaceState(null, "", "#" + active);
+        }
+
+        document.querySelectorAll("[data-module]").forEach((card) => {
+          card.classList.toggle("d-none", card.getAttribute("data-module") !== active);
+        });
+        updateNavActive(active);
+        updateMobileHeader(active);
+
+        const mobileHeader = document.getElementById("settingsMobileHeader");
+        const mobileList = document.getElementById("settingsNavMobileList");
+        if (isMobile()) {
+          if (mobileHeader) mobileHeader.classList.remove("d-none");
+          if (mobileList) mobileList.classList.add("d-none");
+        } else {
+          if (mobileHeader) mobileHeader.classList.add("d-none");
+          if (mobileList) mobileList.classList.remove("d-none");
+        }
+      }
+
+      function showMobileList() {
+        const mobileHeader = document.getElementById("settingsMobileHeader");
+        const mobileList = document.getElementById("settingsNavMobileList");
+        if (mobileHeader) mobileHeader.classList.add("d-none");
+        if (mobileList) mobileList.classList.remove("d-none");
+        history.replaceState(null, "", "#");
+      }
+
+      // Navigation click handlers (desktop + mobile + in-module jumps)
+      document.querySelectorAll("[data-module-link]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.getAttribute("data-module-link");
+          if (!target) return;
+          if (target === active) return;
+          if (!confirmLeaveIfDirty()) return;
+          showModule(target, { pushHash: true });
+        });
+      });
+
+      // Mobile back
+      document.getElementById("btnMobileBack")?.addEventListener("click", () => {
+        if (!confirmLeaveIfDirty()) return;
+        showMobileList();
+      });
+
+      // Track dirty per module form
+      document.querySelectorAll("[data-module-form]").forEach((form) => {
+        const moduleId = form.getAttribute("data-module-form");
+        if (!moduleId) return;
+        const mark = () => setDirty(moduleId, true);
+        form.querySelectorAll("input,textarea,select").forEach((el) => {
+          el.addEventListener("input", mark);
+          el.addEventListener("change", mark);
+        });
+        form.addEventListener("submit", () => setDirty(moduleId, false));
+      });
+
+      // Toggle secret editors (disabled by default to avoid accidental submit).
+      document.querySelectorAll("[data-toggle-secret]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const sel = btn.getAttribute("data-toggle-secret");
+          if (!sel) return;
+          const panel = document.querySelector(sel);
+          if (!panel) return;
+          const isOpen = !panel.classList.contains("d-none");
+          if (isOpen) {
+            panel.classList.add("d-none");
+            panel.querySelectorAll("input,textarea,select").forEach((el) => { el.disabled = true; el.value = ""; });
+            btn.textContent = "修改";
+          } else {
+            panel.classList.remove("d-none");
+            panel.querySelectorAll("input,textarea,select").forEach((el) => { el.disabled = false; });
+            btn.textContent = "取消修改";
+          }
+        });
+      });
+
+      // Tag editor: store as JSON arrays (compatible with legacy comma strings on read).
+      document.querySelectorAll("[data-tag-editor]").forEach((root) => {
+        const targetSel = root.getAttribute("data-target");
+        const target = targetSel ? document.querySelector(targetSel) : null;
+        const tagsEl = root.querySelector("[data-tags]");
+        const input = root.querySelector("[data-tag-input]");
+        if (!target || !tagsEl || !input) return;
+
+        function parseRaw(raw) {
+          const s = String(raw || "").trim();
+          if (!s) return [];
+          if (s.startsWith("[")) {
+            try {
+              const arr = JSON.parse(s);
+              if (Array.isArray(arr)) return arr.map((x) => String(x || "").trim()).filter(Boolean);
+            } catch (e) {}
+          }
+          return s.split(",").map((x) => x.trim()).filter(Boolean);
+        }
+
+        function writeRaw(list) {
+          const out = [];
+          list.forEach((x) => {
+            const t = String(x || "").trim();
+            if (t && !out.includes(t)) out.push(t);
+          });
+          target.value = JSON.stringify(out);
+        }
+
+        function render() {
+          const list = parseRaw(target.value);
+          tagsEl.innerHTML = "";
+          list.forEach((t) => {
+            const chip = document.createElement("span");
+            chip.className = "badge text-bg-light border d-inline-flex align-items-center gap-2 px-2 py-2";
+            chip.innerHTML = `<span>${t}</span><button type="button" class="btn btn-sm btn-link p-0 text-danger" aria-label="删除">×</button>`;
+            chip.querySelector("button")?.addEventListener("click", () => {
+              const next = parseRaw(target.value).filter((x) => x !== t);
+              writeRaw(next);
+              render();
+              target.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+            tagsEl.appendChild(chip);
+          });
+        }
+
+        function addOne(v) {
+          const s = String(v || "").trim();
+          if (!s) return;
+          const list = parseRaw(target.value);
+          if (!list.includes(s)) list.push(s);
+          writeRaw(list);
+          render();
+          target.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          addOne(input.value);
+          input.value = "";
+        });
+
+        // init
+        writeRaw(parseRaw(target.value));
+        render();
+      });
+
+      // Tooltips (Bootstrap)
+      if (window.bootstrap && bootstrap.Tooltip) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => new bootstrap.Tooltip(el));
+      }
+
+      // Warn when leaving page with unsaved changes
+      window.addEventListener("beforeunload", (e) => {
+        if (!anyDirty()) return;
+        e.preventDefault();
+        e.returnValue = "";
+      });
+
+      // Initial module selection: hash > localStorage > default
+      const byHash = (location.hash || "").replace("#", "");
+      const byStore = localStorage.getItem("settings_active_module") || "";
+      const init = moduleOrder.includes(byHash) ? byHash : (moduleOrder.includes(byStore) ? byStore : "sec-general");
+      showModule(init, { pushHash: true });
+
+      async function testEngine(kind) {
+        const sel = document.querySelector(`[data-engine-select="${kind}"]`);
+        const out = document.querySelector(`[data-engine-test-result="${kind}"]`);
+        if (!sel || !out) return;
+        const engineId = (sel.value || "").trim();
+        if (!engineId) {
+          out.textContent = "请选择引擎后再测试";
+          out.className = "small text-danger";
+          return;
+        }
+        out.textContent = "测试中…";
+        out.className = "small text-muted";
+        try {
+          const resp = await fetch("{{ url_for('admin.api_ai_engine_test') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ engine_id: engineId })
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (data && data.ok) {
+            out.textContent = `✅ ${data.status_code} / ${data.duration_ms}ms`;
+            out.className = "small text-success";
+          } else {
+            const sc = data.status_code ? String(data.status_code) : "ERR";
+            out.textContent = `❌ ${sc} / ${data.duration_ms ?? "-"}ms`;
+            out.className = "small text-danger";
+          }
+        } catch (e) {
+          out.textContent = "❌ 测试失败（网络/服务异常）";
+          out.className = "small text-danger";
+        }
+      }
+
+      document.querySelectorAll("[data-engine-test]").forEach((btn) => {
+        btn.addEventListener("click", () => testEngine(btn.getAttribute("data-engine-test")));
+      });
+    })();
+  </script>
+{% endblock %}
+

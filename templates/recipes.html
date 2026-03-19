@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}AI 食谱推荐 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+          <h4 class="mb-1 fw-semibold">AI 食谱推荐</h4>
+          <div class="text-muted small">根据当前冰箱库存，智能推荐今晚吃什么。</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button id="btnRecipeGenerate" class="btn btn-primary tap-btn" type="button">
+            <span class="btn-idle"><i class="bi bi-magic me-1"></i><span>根据库存推荐食谱</span></span>
+            <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>生成中…</span>
+          </button>
+          <button id="btnRecipeRefresh" class="btn btn-outline-primary tap-btn d-none" type="button">
+            <i class="bi bi-arrow-clockwise me-1"></i><span>重新生成</span>
+          </button>
+          <button id="btnRecipeCancel" class="btn btn-outline-secondary tap-btn d-none" type="button">
+            <i class="bi bi-x-circle me-1"></i><span>取消</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="recipeStatus" class="mb-3 small text-muted">
+        点击上方按钮，根据当前库存生成 3~5 道家常菜推荐。
+      </div>
+
+      <div id="recipeLoading" class="py-2 d-none">
+        <div class="border rounded-4 p-3 bg-white">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <div class="small fw-semibold">进度日志</div>
+            <div class="small text-muted">生成中…</div>
+          </div>
+          <div id="recipeLog" class="small text-muted d-flex flex-column gap-1 mt-2"></div>
+        </div>
+      </div>
+
+      <div id="recipeEmpty" class="d-none">
+        <div class="alert alert-info d-flex align-items-center gap-2 mb-0">
+          <span class="alert-icon text-info"><i class="bi bi-info-circle-fill"></i></span>
+          <div>
+            <div class="fw-semibold mb-1">暂无可用食材</div>
+            <div class="small text-muted mb-2">冰箱里好像还空着，先去添加几样常用食材吧。</div>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('main.add') }}"><i class="bi bi-plus-circle me-1"></i>去新增项目</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="recipeError" class="d-none">
+        <div class="alert alert-danger d-flex align-items-center gap-2 mb-0">
+          <span class="alert-icon text-danger"><i class="bi bi-x-circle-fill"></i></span>
+          <div>
+            <div class="fw-semibold mb-1">推荐失败</div>
+            <div id="recipeErrorText" class="small text-muted mb-2"></div>
+            <button class="btn btn-sm btn-outline-primary" type="button" id="btnRetry"><i class="bi bi-arrow-clockwise me-1"></i>重试一次</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="recipeList" class="row g-3 mt-1"></div>
+    </div>
+  </div>
+
+  <!-- 详情 Modal -->
+  <div class="modal fade" id="recipeDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="recipeDetailTitle">食谱详情</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="recipeDetailBody"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 取消确认 Modal -->
+  <div class="modal fade" id="recipeCancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-header">
+          <h5 class="modal-title">取消生成？</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-muted small">当前生成请求会被中止，本次结果不会返回。</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">继续等待</button>
+          <button type="button" class="btn btn-danger" id="btnCancelConfirm">确认取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const btnGen = document.getElementById("btnRecipeGenerate");
+      const btnRefresh = document.getElementById("btnRecipeRefresh");
+      const btnRetry = document.getElementById("btnRetry");
+      const btnCancel = document.getElementById("btnRecipeCancel");
+      const statusEl = document.getElementById("recipeStatus");
+      const loadingEl = document.getElementById("recipeLoading");
+      const emptyEl = document.getElementById("recipeEmpty");
+      const errorEl = document.getElementById("recipeError");
+      const errorTextEl = document.getElementById("recipeErrorText");
+      const listEl = document.getElementById("recipeList");
+      const logEl = document.getElementById("recipeLog");
+
+      const cancelModalEl = document.getElementById("recipeCancelModal");
+      const btnCancelConfirm = document.getElementById("btnCancelConfirm");
+
+      const detailModalEl = document.getElementById("recipeDetailModal");
+      const detailTitleEl = document.getElementById("recipeDetailTitle");
+      const detailBodyEl = document.getElementById("recipeDetailBody");
+
+      let loading = false;
+      let lastRecipes = [];
+      let abortCtrl = null;
+      let heartbeatTimer = null;
+      let lastLogAt = 0;
+
+      function setLoading(v) {
+        loading = !!v;
+        if (loading) {
+          loadingEl.classList.remove("d-none");
+          btnCancel?.classList.remove("d-none");
+          btnRefresh?.classList.add("d-none");
+          btnGen?.querySelector(".btn-idle")?.classList.add("d-none");
+          btnGen?.querySelector(".btn-loading")?.classList.remove("d-none");
+          statusEl.textContent = "";
+        } else {
+          loadingEl.classList.add("d-none");
+          btnCancel?.classList.add("d-none");
+          btnGen?.querySelector(".btn-idle")?.classList.remove("d-none");
+          btnGen?.querySelector(".btn-loading")?.classList.add("d-none");
+        }
+        btnGen.disabled = loading;
+        btnRefresh.disabled = loading;
+        if (btnRetry) btnRetry.disabled = loading;
+      }
+
+      function logStep(msg) {
+        if (!logEl) return;
+        lastLogAt = Date.now();
+        const t = new Date();
+        const hh = String(t.getHours()).padStart(2, "0");
+        const mm = String(t.getMinutes()).padStart(2, "0");
+        const ss = String(t.getSeconds()).padStart(2, "0");
+        const row = document.createElement("div");
+        row.textContent = `[${hh}:${mm}:${ss}] ${msg}`;
+        logEl.appendChild(row);
+      }
+
+      function clearLog() {
+        if (logEl) logEl.innerHTML = "";
+      }
+
+      function clearState() {
+        emptyEl.classList.add("d-none");
+        errorEl.classList.add("d-none");
+        listEl.innerHTML = "";
+        errorTextEl.textContent = "";
+      }
+
+      function renderRecipes(recipes) {
+        lastRecipes = recipes || [];
+        listEl.innerHTML = "";
+        if (!recipes || recipes.length === 0) {
+          listEl.innerHTML = "";
+          return;
+        }
+        const frag = document.createDocumentFragment();
+        recipes.forEach((r, idx) => {
+          const col = document.createElement("div");
+          col.className = "col-12 col-md-6 col-lg-4";
+          const match = typeof r.match_count === "number" && typeof r.total_count === "number" && r.total_count > 0
+            ? `${r.match_count}/${r.total_count}`
+            : "";
+          const ingShort = Array.isArray(r.ingredients) ? r.ingredients.slice(0, 3).join("，") + (r.ingredients.length > 3 ? "…" : "") : "";
+          col.innerHTML = `
+            <div class="card h-100">
+              <div class="card-body d-flex flex-column">
+                <div class="mb-2">
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <h5 class="mb-1">${r.name || "未命名菜谱"}</h5>
+                    ${match ? `<span class="badge bg-success-subtle text-success border border-success-subtle mono">库存匹配 ${match}</span>` : ""}
+                  </div>
+                  <div class="text-muted small">主要食材：${ingShort || "未知"}</div>
+                </div>
+                <div class="mt-auto pt-2">
+                  <button class="btn btn-outline-primary btn-sm w-100 tap-btn" type="button" data-idx="${idx}">
+                    <i class="bi bi-list-ul me-1"></i>查看详情
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+          frag.appendChild(col);
+        });
+        listEl.appendChild(frag);
+
+        listEl.querySelectorAll("button[data-idx]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.getAttribute("data-idx") || "-1");
+            const r = lastRecipes[idx];
+            if (!r) return;
+            showDetail(r);
+          });
+        });
+      }
+
+      function showDetail(recipe) {
+        detailTitleEl.textContent = recipe.name || "食谱详情";
+
+        const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+        const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+
+        const ingHtml = ings.length
+          ? `<ul>${ings.map((x) => `<li>${x}</li>`).join("")}</ul>`
+          : "<div class='text-muted small'>暂无详细食材信息。</div>";
+        const stepsHtml = steps.length
+          ? `<ol>${steps.map((x) => `<li>${typeof x === "string" ? x : (x.text || "")}</li>`).join("")}</ol>`
+          : "<div class='text-muted small'>暂无详细步骤。</div>";
+
+        detailBodyEl.innerHTML = `
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-2">所需食材</h6>
+            ${ingHtml}
+          </div>
+          <div>
+            <h6 class="fw-semibold mb-2">烹饪步骤</h6>
+            ${stepsHtml}
+          </div>
+        `;
+
+        if (window.bootstrap && bootstrap.Modal) {
+          const modal = bootstrap.Modal.getOrCreateInstance(detailModalEl);
+          modal.show();
+        }
+      }
+
+      async function fetchRecipes() {
+        if (loading) return;
+        clearState();
+        clearLog();
+        setLoading(true);
+        statusEl.textContent = "";
+        abortCtrl = new AbortController();
+        const startAt = performance.now();
+        lastLogAt = Date.now();
+        if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+        heartbeatTimer = window.setInterval(() => {
+          if (!loading) return;
+          const since = Date.now() - lastLogAt;
+          if (since < 3500) return;
+          const waited = Math.round((performance.now() - startAt) / 1000);
+          logStep(`还在生成中…（已等待 ${waited} 秒）`);
+        }, 1200);
+        logStep("🧺 正在整理库存清单…");
+        try {
+          logStep("📨 已发出请求，等待返回…");
+          const res = await fetch("{{ url_for('recipes.api_generate') }}", {
+            method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            signal: abortCtrl.signal,
+          });
+          logStep(`✅ 已收到服务器响应（HTTP ${res.status}）`);
+          const data = await res.json();
+          logStep("🧩 结果已解析，准备展示…");
+          if (!data.ok) {
+            errorTextEl.textContent = data.error || "AI 调用失败，请稍后重试。";
+            errorEl.classList.remove("d-none");
+            statusEl.textContent = "食谱推荐失败，可以稍后再试，或检查设置中的 AI 配置。";
+            logStep("❌ 生成失败：服务返回错误信息");
+            return;
+          }
+          const recipes = data.recipes || [];
+          if (recipes.length === 0 && data.reason === "no_ingredients") {
+            emptyEl.classList.remove("d-none");
+            statusEl.textContent = "当前没有可用食材，请先新增一些食材。";
+            btnRefresh.classList.add("d-none");
+            logStep("🫙 当前库存没有可用食材");
+            return;
+          }
+          if (!recipes.length) {
+            statusEl.textContent = "AI 没有返回菜谱，请稍后重试或调整提示词。";
+            errorTextEl.textContent = "AI 未能生成有效菜谱，请稍后重试。";
+            errorEl.classList.remove("d-none");
+            logStep("😕 没有拿到有效菜谱结果");
+            return;
+          }
+          logStep(`🍽️ 已生成 ${recipes.length} 道菜谱，正在排版…`);
+          renderRecipes(recipes);
+          statusEl.textContent = `已生成 ${recipes.length} 道推荐菜谱。`;
+          btnRefresh.classList.remove("d-none");
+          const costMs = Math.round(performance.now() - startAt);
+          logStep(`✨ 完成！总耗时 ${costMs}ms`);
+        } catch (e) {
+          if (e && e.name === "AbortError") {
+            statusEl.textContent = "已取消生成。";
+            logStep("🛑 已取消：请求已中止");
+          } else {
+            console.error(e);
+            errorTextEl.textContent = "网络异常或服务器错误，请稍后重试。";
+            errorEl.classList.remove("d-none");
+            statusEl.textContent = "食谱推荐失败，可以稍后再试。";
+            logStep("🌧️ 网络异常或服务错误，请稍后重试");
+          }
+        } finally {
+          setLoading(false);
+          abortCtrl = null;
+          if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+      }
+
+      btnGen?.addEventListener("click", fetchRecipes);
+      btnRefresh?.addEventListener("click", fetchRecipes);
+      btnRetry?.addEventListener("click", fetchRecipes);
+
+      // Cancel flow: confirm -> abort
+      btnCancel?.addEventListener("click", () => {
+        if (!cancelModalEl || !window.bootstrap) return;
+        bootstrap.Modal.getOrCreateInstance(cancelModalEl).show();
+      });
+      btnCancelConfirm?.addEventListener("click", () => {
+        if (cancelModalEl && window.bootstrap) {
+          const inst = bootstrap.Modal.getInstance(cancelModalEl);
+          inst && inst.hide();
+        }
+        if (abortCtrl) abortCtrl.abort();
+      });
+    })();
+  </script>
+{% endblock %}
+

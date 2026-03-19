@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+instance
+data
+certs
+ops/certs
+node_modules
+agent-transcripts
+.cursor

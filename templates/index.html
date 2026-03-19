@@ -1,0 +1,1391 @@
+{% extends "base.html" %}
+{% block title %}库存 - 小仓屋{% endblock %}
+
+{% block content %}
+  {# Desktop: view tabs stay visible on top #}
+  <div class="d-none d-md-flex flex-nowrap gap-2 mb-3 pill-scroll">
+    <a class="btn btn-sm {% if view == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='all') }}">全部</a>
+    <a class="btn btn-sm {% if view == 'expiring' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expiring') }}">临期</a>
+    <a class="btn btn-sm {% if view == 'expired' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expired') }}">过期</a>
+    <a class="btn btn-sm {% if view == 'usedup' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='usedup') }}">用完</a>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastArea"></div>
+
+  <!-- Mobile search is now in navbar modal; legacy block removed -->
+
+  {% macro render_icon(spec, compact=false) -%}
+    {%- set gap_cls = '' if compact else 'me-1' -%}
+    {%- if spec and spec.type == 'emoji' and spec.text -%}
+      <span class="{{ gap_cls }}">{{ spec.text }}</span>
+    {%- elif spec and spec.type == 'bi' and spec.name -%}
+      <i class="bi bi-{{ spec.name }} {{ gap_cls }}"></i>
+    {%- elif spec and spec.type == 'svg' and spec.key == 'depleted' -%}
+      <svg class="icon-depleted {{ gap_cls }}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" />
+        <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    {%- endif -%}
+  {%- endmacro %}
+
+  {# Mobile: location pills (位置在上；不展示各位置数量，数量仅显示在“全部”) #}
+  <div class="d-md-none d-flex flex-nowrap gap-2 mb-2 pill-scroll inv-filter-row" data-inv-scroll-row="location">
+    <a class="btn btn-sm {% if not location %}btn-primary{% else %}btn-outline-primary{% endif %}"
+       href="{{ url_for('main.index', q=q, category=category, location='', sort=sort, view=view) }}">
+      全部 <span class="mono ms-1">{{ items|length }}</span>
+    </a>
+    {% for l in locations %}
+      {% set label = location_label_map.get(l, l) %}
+      {% set icon_spec = location_icon_map.get(l) %}
+      <a class="btn btn-sm {% if l == location %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('main.index', q=q, category=category, location='' if l == location else l, sort=sort, view=view) }}">
+        {{ render_icon(icon_spec, true) }}{{ label }}
+      </a>
+    {% endfor %}
+    {% if view != 'all' or category or location or q %}
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.index', view='all', sort=sort) }}">清除</a>
+    {% endif %}
+  </div>
+
+  {# Mobile: category pills (食材在下) #}
+  <div class="d-md-none d-flex flex-nowrap gap-2 mb-3 pill-scroll inv-filter-row" data-inv-scroll-row="category">
+    <a class="btn btn-sm {% if not category %}btn-primary{% else %}btn-outline-primary{% endif %}"
+       href="{{ url_for('main.index', q=q, category='', location=location, sort=sort, view=view) }}">
+      📦 全部
+    </a>
+    {% set cat_ns = namespace(counts={}) %}
+    {% for p in category_pills or [] %}
+      {% set _ = cat_ns.counts.update({p.name: p.count}) %}
+    {% endfor %}
+    {% for c in categories %}
+      {% set cnt = cat_ns.counts.get(c, 0) %}
+      {% if cnt > 0 %}
+        {% set label = category_label_map.get(c, (c[:1] if c else '类')) %}
+        {% set icon_spec = category_icon_map.get(c) %}
+        <a class="btn btn-sm {% if category == c %}btn-primary{% else %}btn-outline-primary{% endif %}"
+           href="{{ url_for('main.index', q=q, category='' if category == c else c, location=location, sort=sort, view=view) }}">
+          {{ render_icon(icon_spec, true) }}{{ label }}
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Desktop: full filter form -->
+  <div class="card mb-3 d-none d-md-block">
+    <div class="card-body">
+      <div class="mb-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted small fw-semibold">位置</div>
+          {% if q or category or location %}
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{{ url_for('main.index', q='', category='', location='', sort=sort, view=view) }}">
+              重置筛选
+            </a>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-nowrap gap-2 pill-scroll inv-filter-row">
+          <a class="btn btn-sm {% if not location %}btn-primary{% else %}btn-outline-primary{% endif %}"
+             href="{{ url_for('main.index', q=q, category=category, location='', sort=sort, view=view) }}">全部</a>
+          {% set loc_ns = namespace(counts={}) %}
+          {% for p in location_pills or [] %}
+            {% set _ = loc_ns.counts.update({p.name: p.count}) %}
+          {% endfor %}
+          {% for l in locations %}
+            {% set cnt = loc_ns.counts.get(l, 0) %}
+            <a class="btn btn-sm {% if l == location %}btn-primary{% else %}btn-outline-primary{% endif %}"
+               href="{{ url_for('main.index', q=q, category=category, location=l, sort=sort, view=view) }}">
+              {{ l }}{% if cnt and cnt > 0 %} <span class="mono ms-1">{{ cnt }}</span>{% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="text-muted small fw-semibold mb-1">分类</div>
+        <div class="d-flex flex-nowrap gap-2 pill-scroll inv-filter-row">
+          <a class="btn btn-sm {% if not category %}btn-primary{% else %}btn-outline-primary{% endif %}"
+             href="{{ url_for('main.index', q=q, category='', location=location, sort=sort, view=view) }}">全部</a>
+          {% set cat_ns = namespace(counts={}) %}
+          {% for p in category_pills or [] %}
+            {% set _ = cat_ns.counts.update({p.name: p.count}) %}
+          {% endfor %}
+          {% for c in categories %}
+            {% set cnt = cat_ns.counts.get(c, 0) %}
+            {% set icon_spec = category_icon_map.get(c) %}
+            <a class="btn btn-sm {% if c == category %}btn-primary{% else %}btn-outline-primary{% endif %}"
+               href="{{ url_for('main.index', q=q, category=c, location=location, sort=sort, view=view) }}">
+              {{ render_icon(icon_spec) }}{{ c }}{% if cnt and cnt > 0 %} <span class="mono ms-1">{{ cnt }}</span>{% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <form class="row g-2 align-items-end" method="get" action="{{ url_for('main.index') }}" id="desktopFilterForm">
+        <input type="hidden" name="view" value="{{ view }}" />
+        <div class="col-12 col-md-5">
+          <label class="form-label">搜索</label>
+          <input class="form-control" name="q" value="{{ q }}" placeholder="按名称/备注/单位搜索" />
+        </div>
+        <input type="hidden" name="category" value="{{ category }}" />
+        <input type="hidden" name="location" value="{{ location }}" />
+        <div class="col-6 col-md-3">
+          <label class="form-label">排序</label>
+          <select class="form-select" name="sort" id="desktopSort">
+            <option value="created_desc" {% if sort == 'created_desc' %}selected{% endif %}>按录入日期（新→旧）</option>
+            <option value="name_asc" {% if sort == 'name_asc' %}selected{% endif %}>按名称（A→Z）</option>
+            <option value="category_asc" {% if sort == 'category_asc' %}selected{% endif %}>按分类</option>
+            <option value="location_asc" {% if sort == 'location_asc' %}selected{% endif %}>按位置</option>
+            <option value="remain_asc" {% if sort == 'remain_asc' %}selected{% endif %}>按剩余天数（少→多）</option>
+            <option value="stored_desc" {% if sort == 'stored_desc' %}selected{% endif %}>按已存放天数（多→少）</option>
+            <option value="smart" {% if sort == 'smart' %}selected{% endif %}>智能（临期/过期置顶）</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2 d-grid">
+          <button class="btn btn-outline-secondary" type="submit">应用</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Filters moved into hamburger menu (menuDrawer) -->
+  <div class="d-none" id="menuFiltersTemplate">
+    <div class="text-muted small fw-semibold mb-2">筛选</div>
+    <div class="d-flex flex-nowrap gap-2 pill-scroll inv-filter-row mb-2">
+      <a class="btn btn-sm {% if view == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='all') }}">📦 全部</a>
+      <a class="btn btn-sm {% if view == 'expiring' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expiring') }}">⏳ 临期</a>
+      <a class="btn btn-sm {% if view == 'expired' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='expired') }}">⚠️ 过期</a>
+      <a class="btn btn-sm {% if view == 'usedup' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+         href="{{ url_for('main.index', q=q, category=category, location=location, sort=sort, view='usedup') }}">❌ 用完</a>
+    </div>
+
+    <form id="menuFilterForm" class="row g-2" method="get" action="{{ url_for('main.index') }}">
+      <input type="hidden" name="view" value="{{ view }}" />
+      <div class="col-12">
+        <label class="form-label mb-1">排序</label>
+        <select class="form-select" name="sort">
+          <option value="created_desc" {% if sort == 'created_desc' %}selected{% endif %}>按录入日期（新→旧）</option>
+          <option value="name_asc" {% if sort == 'name_asc' %}selected{% endif %}>按名称（A→Z）</option>
+          <option value="category_asc" {% if sort == 'category_asc' %}selected{% endif %}>按分类</option>
+          <option value="location_asc" {% if sort == 'location_asc' %}selected{% endif %}>按位置</option>
+          <option value="remain_asc" {% if sort == 'remain_asc' %}selected{% endif %}>按剩余天数（少→多）</option>
+          <option value="stored_desc" {% if sort == 'stored_desc' %}selected{% endif %}>按已存放天数（多→少）</option>
+          <option value="smart" {% if sort == 'smart' %}selected{% endif %}>智能（临期/过期置顶）</option>
+        </select>
+      </div>
+      <div class="col-12 d-grid gap-2 mt-1">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>应用</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.index', sort=sort, view='all') }}">清空筛选</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="text-muted">共 <span class="mono" id="invCount">{{ items|length }}</span> 项</div>
+        <button class="d-none" type="button" id="btnBatchToggle" aria-hidden="true"></button>
+        <span class="d-none" id="batchToggleText"></span>
+      </div>
+
+      {% if items|length == 0 %}
+        <div class="p-5 text-center">
+          <div class="mb-3">
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                 style="width: 72px; height: 72px; background: rgba(44,95,45,.08); color: var(--brand);">
+              <i class="bi bi-basket3 fs-2"></i>
+            </div>
+          </div>
+          <div class="fw-semibold mb-1">没有找到符合条件的食材～</div>
+          <div class="text-muted small mb-3">可以尝试清除筛选，或先添加一些食材。</div>
+          <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+            <a class="btn btn-outline-secondary" href="{{ url_for('main.index', view='all', sort=sort) }}"><i class="bi bi-x-circle me-1"></i>清除筛选</a>
+            <a class="btn btn-primary" href="{{ url_for('main.add') }}"><i class="bi bi-plus-circle me-1"></i>新增项目</a>
+          </div>
+        </div>
+      {% else %}
+        <!-- Mobile cards -->
+        <div class="d-md-none">
+          <div class="d-flex flex-column gap-3" id="invMobileList">
+            {% for item in items %}
+              {% set stored = item.stored_days() %}
+              {% set remain = item.remaining_days() if item.shelf_life_days is not none else none %}
+              <div class="card inv-mobile-card" style="border-radius: 1rem;"
+                   data-item-row="{{ item.id }}"
+                   data-edit-href="{{ url_for('main.edit', item_id=item.id, next=request.full_path) }}"
+                   data-item-category="{{ item.category }}"
+                   data-item-location="{{ item.location }}">
+                <div class="card-body p-2 inv-mobile-card-body">
+                  <div class="d-flex justify-content-between align-items-center gap-2 inv-mobile-card-top">
+                    <div class="flex-grow-1" style="min-width: 0;">
+                      <div class="d-flex align-items-center flex-wrap gap-2 inv-mobile-card-title" style="min-width:0;">
+                        {% if remain is not none %}
+                          {% if remain < 0 %}
+                            <span class="badge text-bg-danger">过期</span>
+                          {% elif remain <= expiring_soon_days %}
+                            <span class="badge text-bg-warning">临期</span>
+                          {% else %}
+                            <span class="badge text-bg-success">正常</span>
+                          {% endif %}
+                        {% endif %}
+                      <a class="fw-semibold text-decoration-none text-dark text-truncate inv-mobile-card-name" style="font-size: 17px; max-width: 100%;" href="{{ url_for('main.edit', item_id=item.id, next=request.full_path) }}">{{ item.name }}</a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="small mt-2 text-warning fw-semibold usedup-hint {% if not (item.quantity <= 0 and not item.used_up) %}d-none{% endif %}" data-item="{{ item.id }}">
+                    <i class="bi bi-exclamation-circle-fill me-1"></i>数量为 0（未标记用完）
+                  </div>
+
+                  {% if remain is not none and item.shelf_life_days is not none and item.shelf_life_days > 0 %}
+                    {% set pct = (remain / item.shelf_life_days * 100) if remain >= 0 else 100 %}
+                    {% if pct < 0 %}{% set pct = 0 %}{% endif %}
+                    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+                    {% set pct_int = pct|round(0, 'floor')|int %}
+                    {% if remain < 0 %}
+                      {% set bar_cls = "bg-danger" %}
+                    {% elif remain <= expiring_soon_days %}
+                      {% set bar_cls = "bg-warning" %}
+                    {% else %}
+                      {% set bar_cls = "bg-success" %}
+                    {% endif %}
+                    <div class="remain-bar mt-2 inv-mobile-card-bar">
+                      <span class="{{ bar_cls }} {% if remain >= 0 and remain <= expiring_soon_days %}flash-once{% endif %}" data-pct="{{ pct_int }}"></span>
+                    </div>
+                  {% endif %}
+
+                  <div class="d-flex justify-content-between align-items-center mt-1 inv-mobile-card-bottom">
+                    <span class="small text-secondary fw-semibold text-nowrap inv-mobile-card-stored">已存放 {{ stored }} 天</span>
+                    <div class="d-flex align-items-center gap-2">
+                      {% if view != 'usedup' %}
+                        <form method="post"
+                              action="{{ url_for('items.use_up_route', item_id=item.id) }}"
+                              data-use-up
+                              data-qty="{{ item.quantity }}"
+                              data-step="{{ item.quick_step if item.quick_step is not none else 1.0 }}"
+                              onsubmit="return window.fridgeUseUpConfirm(event);">
+                          <button class="btn btn-outline-primary tap-btn mini-action-btn"
+                                  type="submit"
+                                  aria-label="用完"
+                                  title="用完">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      {% endif %}
+
+                      <div class="batch-only form-check mb-0">
+                        <input class="form-check-input item-select-mobile" type="checkbox"
+                               value="{{ item.id }}" id="select-mobile-{{ item.id }}" aria-label="选择 {{ item.name }}" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {% if view == 'usedup' %}
+                  <div class="mt-3 d-flex gap-2 align-items-center">
+                      <button class="btn btn-outline-danger tap-btn mini-action-btn" type="button"
+                              data-action="usedup-local" data-item="{{ item.id }}" data-delta="-1"
+                              data-current="{{ item.quantity }}" aria-label="减少 1"
+                              {% if item.quantity <= 0 %}disabled{% endif %}>
+                        <i class="bi bi-dash"></i>
+                      </button>
+                      <button class="btn btn-outline-success tap-btn mini-action-btn" type="button"
+                              data-action="usedup-local" data-item="{{ item.id }}" data-delta="1"
+                              data-current="{{ item.quantity }}" aria-label="增加 1">
+                        <i class="bi bi-plus"></i>
+                      </button>
+                      <button class="btn btn-primary flex-grow-1 tap-btn action-btn"
+                              type="button"
+                              data-action="usedup-confirm"
+                              data-item="{{ item.id }}"
+                              data-original="{{ item.quantity }}"
+                              disabled>
+                        确定
+                      </button>
+                      <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认删除：{{ item.name }}？');">
+                        <button class="btn btn-outline-danger tap-btn mini-action-btn" type="submit" aria-label="删除">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="table-responsive d-none d-md-block">
+        <div class="table-responsive">
+          <table class="table table-hover table-striped align-middle" id="itemsTable">
+            <thead>
+              <tr class="text-muted">
+                <th class="batch-only" style="width: 42px;">
+                  <input class="form-check-input" type="checkbox" id="selectAllDesktop" aria-label="全选" />
+                </th>
+                <th style="min-width: 180px;">名称</th>
+                <th style="min-width: 120px;">分类</th>
+                <th style="min-width: 120px;">位置</th>
+                <th style="min-width: 180px;">存放</th>
+                <th style="min-width: 160px;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+                <tr data-item-row="{{ item.id }}" data-item-category="{{ item.category }}" data-item-location="{{ item.location }}">
+                  <td class="batch-only">
+                    <input class="form-check-input item-select-desktop" type="checkbox"
+                           value="{{ item.id }}" aria-label="选择 {{ item.name }}" />
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ item.name }}</div>
+                    {% if item.note %}
+                      <div class="small text-muted text-truncate" style="max-width: 360px;">{{ item.note }}</div>
+                    {% endif %}
+                    <div class="small text-muted">入库：{{ item.created_at.strftime("%Y-%m-%d") }} · 更新：{{ item.updated_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                  </td>
+                  <td>
+                    {% set icon_spec = category_icon_map.get(item.category) %}
+                    <span class="badge badge-soft">
+                      {{ render_icon(icon_spec) }}
+                      {{ item.category }}
+                    </span>
+                  </td>
+                  <td>{{ item.location }}</td>
+                  <td>
+                    {% set stored = item.stored_days() %}
+                    <div class="mono fw-semibold">已存放 {{ stored }} 天</div>
+                    {% if item.shelf_life_days is not none %}
+                      {% set remain = item.remaining_days() %}
+                      {% if remain < 0 %}
+                        <span class="badge text-bg-danger">过期</span>
+                      {% elif remain <= expiring_soon_days %}
+                        <span class="badge text-bg-warning">临期</span>
+                      {% else %}
+                        <span class="badge text-bg-success">正常</span>
+                      {% endif %}
+                      {% if remain >= 0 %}
+                        <div class="small text-muted">剩余 {{ remain }} 天（保质期 {{ item.shelf_life_days }} 天）</div>
+                      {% else %}
+                        <div class="small text-danger">已过期 {{ (-remain) }} 天（保质期 {{ item.shelf_life_days }} 天）</div>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex gap-2">
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.edit', item_id=item.id, next=request.full_path) }}">编辑</a>
+                      {# 归档功能已移除 #}
+                      <form method="post" action="{{ url_for('items.use_up_route', item_id=item.id) }}"
+                            data-use-up data-qty="{{ item.quantity }}"
+                            data-step="{{ item.quick_step if item.quick_step is not none else 1.0 }}"
+                            onsubmit="return window.fridgeUseUpConfirm(event);">
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="标记用完">用完</button>
+                      </form>
+                      <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认删除：{{ item.name }}？');">
+                        <button class="btn btn-sm btn-danger" type="submit">删除</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <a class="fab btn btn-primary d-md-none" href="{{ url_for('main.add') }}" aria-label="新增">
+    <i class="bi bi-plus-lg fs-4"></i>
+  </a>
+
+  <div id="batchBar" class="sticky-actions d-none mt-3 batch-only">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div class="small text-muted">
+        已选择 <span class="mono fw-semibold" id="batchCount">0</span> 项
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="btnBatchClose">
+          <i class="bi bi-x-lg me-1"></i>关闭批量
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="btnBatchClear">清除选择</button>
+        <button class="btn btn-outline-danger btn-sm" type="button" id="btnBatchUseUp">
+          <i class="bi bi-trash me-1"></i>批量标记用完
+        </button>
+        <button class="btn btn-danger btn-sm" type="button" id="btnBatchDelete">
+          <i class="bi bi-x-circle me-1"></i>批量删除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="adjustModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>自定义调整</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="adjustForm" method="post">
+            <div class="mb-2">
+              <label class="form-label">调整值（delta）</label>
+              <input id="adjustDelta" class="form-control mono" name="delta" placeholder="例如：-2 或 0.5" inputmode="decimal" />
+              <div class="form-text">负数代表减少，正数代表增加。</div>
+            </div>
+            <div class="d-grid gap-2 mt-3">
+              <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>应用</button>
+              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">取消</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="qtyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-arrows-move me-2"></i>调整数量</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-muted small">当前数量</div>
+            <div class="mono fw-bold">
+              <span id="qtyModalCurrent">0</span>
+              <span id="qtyModalUnit" class="text-muted">件</span>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-5">
+              <div id="qtyModalWheel" class="border rounded-3" style="height: 170px; overflow-y: auto; position: relative;">
+                <div class="position-absolute top-50 start-0 end-0 translate-middle-y" style="border-top: 1px solid rgba(0,0,0,.08); border-bottom: 1px solid rgba(0,0,0,.08); pointer-events: none;"></div>
+                <div id="qtyModalWheelInner" class="py-2"></div>
+              </div>
+            </div>
+            <div class="col-7 d-flex flex-column gap-2">
+              <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-secondary" type="button" id="qtyModalMinus">
+                  <i class="bi bi-dash-lg"></i>
+                </button>
+                <input
+                  id="qtyModalNumber"
+                  class="form-control mono text-center"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                />
+                <button class="btn btn-outline-secondary" type="button" id="qtyModalPlus">
+                  <i class="bi bi-plus-lg"></i>
+                </button>
+              </div>
+              <button id="qtyModalApply" class="btn btn-primary w-100" type="button">应用</button>
+              <div class="form-text">支持任意整数数量，可滑动左侧滑轮或在输入框中输入。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="useUpModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-header">
+          <h5 class="modal-title">确认已用完？</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0">将清零并移入用完列表。</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="useUpConfirmBtn">确认用完</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const CURRENT_VIEW = "{{ view }}";
+
+      // Remaining-days progress bars (set widths from data-pct)
+      document.querySelectorAll(".remain-bar > span[data-pct]").forEach((el) => {
+        const raw = el.getAttribute("data-pct");
+        const pct = Math.max(0, Math.min(100, Number(raw || "0")));
+        el.style.width = pct + "%";
+      });
+
+      // Preserve scroll position for mobile filter pill rows:
+      // - Keep vertical scroll (page) after applying filters
+      // - Keep horizontal scroll (pill rows) after selecting a pill
+      (function () {
+        // Wire base hamburger menu (offcanvas) for index page.
+        (function () {
+          const menuFiltersSlot = document.getElementById("menuFiltersSlot");
+          const menuFiltersTemplate = document.getElementById("menuFiltersTemplate");
+          const menuToggleBatch = document.getElementById("menuToggleBatch");
+          const menuToggleBatchText = document.getElementById("menuToggleBatchText");
+
+          // Inject filters into menu so we don't need a second drawer.
+          if (menuFiltersSlot && menuFiltersTemplate) {
+            menuFiltersSlot.innerHTML = menuFiltersTemplate.innerHTML;
+            menuFiltersSlot.classList.remove("d-none");
+            menuFiltersTemplate.remove();
+          }
+
+          if (menuToggleBatch) menuToggleBatch.classList.remove("d-none");
+
+          // Toggle batch mode from menu (shares the same button id used elsewhere)
+          if (menuToggleBatch) {
+            menuToggleBatch.addEventListener("click", () => {
+              const btn = document.getElementById("btnBatchToggle");
+              if (btn) btn.click();
+              // update label next tick (batchMode is internal; we derive from body class)
+              window.setTimeout(() => {
+                const on = !document.body.classList.contains("batch-off");
+                if (menuToggleBatchText) menuToggleBatchText.textContent = on ? "关闭批量选择" : "开启批量选择";
+              }, 0);
+              try { bootstrap.Offcanvas.getInstance(document.getElementById("menuDrawer"))?.hide(); } catch (e) {}
+            });
+          }
+
+          // Update menu label initially
+          window.setTimeout(() => {
+            const on = !document.body.classList.contains("batch-off");
+            if (menuToggleBatchText) menuToggleBatchText.textContent = on ? "关闭批量选择" : "开启批量选择";
+          }, 0);
+
+          // Close menu when a filter link is clicked / filter form is submitted.
+          window.setTimeout(() => {
+            const drawerEl = document.getElementById("menuDrawer");
+            const inst = drawerEl ? bootstrap.Offcanvas.getOrCreateInstance(drawerEl) : null;
+            document.querySelectorAll("#menuDrawer a[href]").forEach((a) => {
+              a.addEventListener("click", () => { try { inst?.hide(); } catch (e) {} });
+            });
+            const form = document.getElementById("menuFilterForm");
+            if (form) {
+              form.addEventListener("submit", () => { try { inst?.hide(); } catch (e) {} });
+            }
+          }, 0);
+        })();
+
+        // Wire navbar search modal (index only).
+        (function () {
+          const modalEl = document.getElementById("searchModal");
+          const input = document.getElementById("navSearchInput");
+          const btn = document.getElementById("navSearchApply");
+          if (!modalEl || !input || !btn) return;
+          const HASH = "#search";
+          let armed = false;
+          let watchdogTimer = 0;
+
+          function getModalInst() {
+            try {
+              if (window.bootstrap && bootstrap.Modal) {
+                return bootstrap.Modal.getOrCreateInstance(modalEl);
+              }
+            } catch (e) {}
+            return null;
+          }
+
+          function isShown() {
+            return modalEl.classList.contains("show");
+          }
+
+          function setHashState() {
+            try {
+              const u = new URL(window.location.href);
+              if (u.hash !== HASH) {
+                u.hash = HASH;
+                history.pushState({ __modal: "search" }, "", u.toString());
+              }
+            } catch (e) {}
+          }
+
+          function clearHashState() {
+            try {
+              const u = new URL(window.location.href);
+              if (u.hash === HASH) {
+                u.hash = "";
+                history.replaceState(history.state, "", u.toString());
+              }
+            } catch (e) {}
+          }
+
+          function startWatchdog() {
+            stopWatchdog();
+            // Very defensive: if URL already moved away from #search but modal remains,
+            // hide it. Helps with iOS back-swipe oddities.
+            watchdogTimer = window.setInterval(() => {
+              if (!armed) return;
+              if (!isShown()) return;
+              if (window.location.hash !== HASH) {
+                try { getModalInst()?.hide(); } catch (e) {}
+                armed = false;
+              }
+            }, 200);
+          }
+
+          function stopWatchdog() {
+            if (watchdogTimer) {
+              window.clearInterval(watchdogTimer);
+              watchdogTimer = 0;
+            }
+          }
+
+          const apply = () => {
+            const q = (input.value || "").trim();
+            const u = new URL(window.location.href);
+            if (q) u.searchParams.set("q", q);
+            else u.searchParams.delete("q");
+            // Keep other params (view/category/location/sort) as-is.
+            window.location.href = u.toString();
+          };
+
+          modalEl.addEventListener("shown.bs.modal", () => {
+            // Arm back-gesture handling: create a dedicated history entry with #search.
+            // Then any real back navigation will pop it first, and we close the modal.
+            if (!armed) {
+              setHashState();
+              armed = true;
+              startWatchdog();
+            }
+            const u = new URL(window.location.href);
+            input.value = (u.searchParams.get("q") || "").trim();
+            try { input.focus(); } catch (e) {}
+            try { input.select(); } catch (e) {}
+          });
+
+          modalEl.addEventListener("hidden.bs.modal", () => {
+            // Clear the #search marker without extra back navigation.
+            clearHashState();
+            armed = false;
+            stopWatchdog();
+          });
+
+          function closeOnNav() {
+            // On any navigation/back action: if modal is visible, close it.
+            if (!isShown()) return;
+            const inst = getModalInst();
+            if (inst) {
+              try { inst.hide(); } catch (e) {}
+            } else {
+              // DOM-level fallback: ensure overlay is removed even if bootstrap instance is unavailable.
+              try { modalEl.classList.remove("show"); } catch (e) {}
+              try { modalEl.style.display = "none"; } catch (e) {}
+              try { document.body.classList.remove("modal-open"); } catch (e) {}
+              try { document.body.style.removeProperty("padding-right"); } catch (e) {}
+              try { document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove()); } catch (e) {}
+            }
+            armed = false;
+          }
+
+          window.addEventListener("hashchange", closeOnNav);
+          window.addEventListener("popstate", closeOnNav);
+          window.addEventListener("pagehide", closeOnNav);
+
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          });
+          btn.addEventListener("click", () => apply());
+        })();
+
+        const KEY = "inv_scroll_state:v1";
+        const MAX_AGE_MS = 15000;
+
+        function capture() {
+          const rows = {};
+          document.querySelectorAll(".inv-filter-row[data-inv-scroll-row]").forEach((el) => {
+            const k = el.getAttribute("data-inv-scroll-row") || "";
+            if (!k) return;
+            rows[k] = el.scrollLeft || 0;
+          });
+          const state = {
+            ts: Date.now(),
+            path: window.location.pathname,
+            y: window.scrollY || 0,
+            rows,
+          };
+          try {
+            sessionStorage.setItem(KEY, JSON.stringify(state));
+          } catch (e) {}
+        }
+
+        function restoreIfAny() {
+          let raw = "";
+          try {
+            raw = sessionStorage.getItem(KEY) || "";
+          } catch (e) {
+            raw = "";
+          }
+          if (!raw) return;
+          let state = null;
+          try {
+            state = JSON.parse(raw);
+          } catch (e) {
+            state = null;
+          }
+          if (!state || state.path !== window.location.pathname) return;
+          if (typeof state.ts !== "number" || Date.now() - state.ts > MAX_AGE_MS) {
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+            return;
+          }
+
+          const apply = () => {
+            if (typeof state.y === "number" && state.y > 0) {
+              window.scrollTo(0, state.y);
+            }
+            const rows = state.rows || {};
+            document.querySelectorAll(".inv-filter-row[data-inv-scroll-row]").forEach((el) => {
+              const k = el.getAttribute("data-inv-scroll-row") || "";
+              if (!k) return;
+              const x = rows[k];
+              if (typeof x === "number" && x >= 0) {
+                el.scrollLeft = x;
+              }
+            });
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+          };
+
+          // Wait for layout: do a couple of frames for safer restoration.
+          requestAnimationFrame(() => requestAnimationFrame(apply));
+        }
+
+        // Save before navigation (pill click)
+        document.querySelectorAll(".inv-filter-row a[href]").forEach((a) => {
+          a.addEventListener("click", () => capture(), { passive: true });
+        });
+        // Save before applying filters in drawer
+        const form = document.getElementById("mobileFilterForm");
+        if (form) {
+          form.addEventListener("submit", () => capture());
+        }
+
+        restoreIfAny();
+      })();
+
+      // Mobile: make location/category pills filter in-place (no full page navigation).
+      // This removes the "flash" caused by full page reloads.
+      (function () {
+        function parseUrl(href) {
+          try {
+            return new URL(href, window.location.origin);
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function getSelectedFromUrl(u) {
+          const sp = (u && u.searchParams) ? u.searchParams : new URL(window.location.href).searchParams;
+          return {
+            category: (sp.get("category") || "").trim(),
+            location: (sp.get("location") || "").trim(),
+          };
+        }
+
+        function matches(itemEl, sel) {
+          const c = (itemEl.getAttribute("data-item-category") || "").trim();
+          const l = (itemEl.getAttribute("data-item-location") || "").trim();
+          if (sel.category && sel.category !== c) return false;
+          if (sel.location && sel.location !== l) return false;
+          return true;
+        }
+
+        function applySelectionToRow(rowEl, sel) {
+          const mode = rowEl.getAttribute("data-inv-scroll-row") || "";
+          rowEl.querySelectorAll("a[href]").forEach((a) => {
+            const u = parseUrl(a.getAttribute("href") || "");
+            if (!u) return;
+            const s = getSelectedFromUrl(u);
+            const active = (mode === "location") ? (s.location === sel.location) : (s.category === sel.category);
+            a.classList.toggle("btn-primary", active);
+            a.classList.toggle("btn-outline-primary", !active);
+          });
+        }
+
+        function applyFilter(sel) {
+          let count = 0;
+          document.querySelectorAll('[data-item-row][data-item-category][data-item-location]').forEach((el) => {
+            const ok = matches(el, sel);
+            el.classList.toggle("d-none", !ok);
+            if (ok) count += 1;
+          });
+          const cnt = document.getElementById("invCount");
+          if (cnt) cnt.textContent = String(count);
+          document.querySelectorAll('.inv-filter-row[data-inv-scroll-row]').forEach((row) => applySelectionToRow(row, sel));
+        }
+
+        function setUrlFromSel(sel) {
+          const u = new URL(window.location.href);
+          if (sel.category) u.searchParams.set("category", sel.category);
+          else u.searchParams.delete("category");
+          if (sel.location) u.searchParams.set("location", sel.location);
+          else u.searchParams.delete("location");
+          return u;
+        }
+
+        // Intercept only the two top mobile rows (location/category).
+        document.querySelectorAll('.inv-filter-row[data-inv-scroll-row] a[href]').forEach((a) => {
+          a.addEventListener("click", (e) => {
+            const href = a.getAttribute("href") || "";
+            const u = parseUrl(href);
+            if (!u) return;
+            if (u.pathname !== window.location.pathname) return;
+            e.preventDefault();
+            const current = getSelectedFromUrl(null);
+            const sel = getSelectedFromUrl(u);
+
+            // Toggle behavior: clicking the already-selected pill clears that filter.
+            const row = a.closest('.inv-filter-row[data-inv-scroll-row]');
+            const mode = row ? (row.getAttribute("data-inv-scroll-row") || "") : "";
+            if (mode === "location") {
+              if (sel.location && sel.location === current.location) sel.location = "";
+            } else if (mode === "category") {
+              if (sel.category && sel.category === current.category) sel.category = "";
+            }
+            const nextUrl = setUrlFromSel(sel);
+            try { history.pushState({ inv: 1 }, "", nextUrl.toString()); } catch (err) {}
+            applyFilter(sel);
+            try { a.blur(); } catch (err) {}
+          });
+        });
+
+        window.addEventListener("popstate", () => {
+          applyFilter(getSelectedFromUrl(new URL(window.location.href)));
+        });
+
+        // Initial apply based on URL (keeps UI consistent).
+        applyFilter(getSelectedFromUrl(new URL(window.location.href)));
+      })();
+
+      function showToast(message, type = "success") {
+        const area = document.getElementById("toastArea");
+        if (!area || !window.bootstrap) return;
+        const div = document.createElement("div");
+        div.className = `toast align-items-center text-bg-${type} border-0`;
+        div.role = "alert";
+        div.innerHTML = `
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        `;
+        area.appendChild(div);
+        const t = new bootstrap.Toast(div, { delay: 1800 });
+        t.show();
+        div.addEventListener("hidden.bs.toast", () => div.remove());
+      }
+
+      function setQtyUI(itemId, qty, usedUp) {
+        const q = Number(qty || 0);
+        document.querySelectorAll(`.qty-slider-trigger[data-item="${itemId}"]`).forEach((el) => {
+          el.setAttribute("data-qty", String(q));
+        });
+        // When qty goes from 0 -> >0, immediately hide the "数量为 0" hint.
+        document.querySelectorAll(`.usedup-hint[data-item="${itemId}"]`).forEach((el) => {
+          if (q <= 0 && !usedUp) el.classList.remove("d-none");
+          else el.classList.add("d-none");
+        });
+      }
+
+      // Desktop: auto-apply sort without clicking "应用"
+      (function () {
+        const sortSel = document.getElementById("desktopSort");
+        const form = document.getElementById("desktopFilterForm");
+        if (!sortSel || !form) return;
+        sortSel.addEventListener("change", () => {
+          try { form.submit(); } catch (e) {}
+        });
+      })();
+
+      // Mobile search moved to navbar modal (#searchModal).
+
+      // Quantity slider modal (click quantity text)
+      const qtyModalEl = document.getElementById("qtyModal");
+      const qtyNumber = document.getElementById("qtyModalNumber");
+      const qtyApply = document.getElementById("qtyModalApply");
+      const qtyCurrent = document.getElementById("qtyModalCurrent");
+      const qtyUnit = document.getElementById("qtyModalUnit");
+      const qtyMinus = document.getElementById("qtyModalMinus");
+      const qtyPlus = document.getElementById("qtyModalPlus");
+      const qtyWheel = document.getElementById("qtyModalWheel");
+      const qtyWheelInner = document.getElementById("qtyModalWheelInner");
+      let qtyModalItemId = "";
+      let qtyModalOriginal = 0;
+      let qtyWheelItemHeight = 0;
+
+      function ensureWheelUpTo(maxValue) {
+        if (!qtyWheelInner) return;
+        const safeMax = Math.max(0, maxValue);
+        const existing = qtyWheelInner.querySelectorAll("[data-value]").length;
+        let start = existing > 0 ? existing : 0;
+        for (let v = start; v <= safeMax; v++) {
+          const row = document.createElement("div");
+          row.className = "py-1 text-center mono";
+          row.setAttribute("data-value", String(v));
+          row.textContent = String(v);
+          qtyWheelInner.appendChild(row);
+        }
+        if (!qtyWheelItemHeight) {
+          const first = qtyWheelInner.querySelector("[data-value]");
+          if (first) qtyWheelItemHeight = first.getBoundingClientRect().height || 32;
+        }
+      }
+
+      function highlightWheelNearest() {
+        if (!qtyWheel || !qtyWheelInner) return;
+        const wheelRect = qtyWheel.getBoundingClientRect();
+        const centerY = wheelRect.top + wheelRect.height / 2;
+        let best = null;
+        let bestDist = Infinity;
+        qtyWheelInner.querySelectorAll("[data-value]").forEach((row) => {
+          const rect = row.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          const dist = Math.abs(mid - centerY);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = row;
+          }
+        });
+        if (!best) return;
+        qtyWheelInner.querySelectorAll("[data-value]").forEach((row) => {
+          row.classList.remove("fw-bold", "text-primary");
+        });
+        best.classList.add("fw-bold", "text-primary");
+        const v = parseInt(best.getAttribute("data-value") || "0", 10) || 0;
+        if (qtyNumber) qtyNumber.value = String(v);
+      }
+
+      function scrollWheelToValue(value) {
+        if (!qtyWheel || !qtyWheelInner) return;
+        const v = Math.max(0, value);
+        ensureWheelUpTo(v + 50);
+        const item = qtyWheelInner.querySelector(`[data-value="${v}"]`);
+        if (!item) return;
+        if (!qtyWheelItemHeight) {
+          qtyWheelItemHeight = item.getBoundingClientRect().height || 32;
+        }
+        const targetScrollTop = Math.max(
+          0,
+          item.offsetTop - qtyWheel.clientHeight / 2 + qtyWheelItemHeight / 2,
+        );
+        qtyWheel.scrollTop = targetScrollTop;
+        highlightWheelNearest();
+      }
+
+      if (qtyWheelInner) {
+        qtyWheelInner.addEventListener("click", (e) => {
+          const target = e.target;
+          if (!target || !target.getAttribute) return;
+          const valAttr = target.getAttribute("data-value");
+          if (valAttr == null) return;
+          const v = parseInt(valAttr || "0", 10) || 0;
+          scrollWheelToValue(v);
+        });
+      }
+
+      document.querySelectorAll(".qty-slider-trigger").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const itemId = btn.getAttribute("data-item") || "";
+          const unit = btn.getAttribute("data-unit") || "";
+          const qty = Number(btn.getAttribute("data-qty") || "0");
+          if (!qtyModalEl || !qtyNumber || !qtyApply || !qtyCurrent || !qtyUnit) return;
+          if (!itemId) return;
+          qtyModalItemId = itemId;
+          qtyModalOriginal = Number.isFinite(qty) ? Math.max(0, Math.round(qty)) : 0;
+          qtyCurrent.textContent = String(qtyModalOriginal);
+          qtyUnit.textContent = unit || "件";
+
+          if (qtyNumber) qtyNumber.value = String(qtyModalOriginal);
+          ensureWheelUpTo(qtyModalOriginal + 20);
+          scrollWheelToValue(qtyModalOriginal);
+
+          bootstrap.Modal.getOrCreateInstance(qtyModalEl).show();
+        });
+      });
+
+      if (qtyNumber) qtyNumber.addEventListener("input", () => {
+        // 只允许整数，空值暂不强制处理
+        const raw = (qtyNumber.value || "").replace(/[^\d]/g, "");
+        qtyNumber.value = raw;
+      });
+
+      if (qtyMinus) {
+        qtyMinus.addEventListener("click", () => {
+          if (!qtyNumber) return;
+          const current = parseInt(qtyNumber.value || "0", 10) || 0;
+          const next = Math.max(0, current - 1);
+          qtyNumber.value = String(next);
+          scrollWheelToValue(next);
+        });
+      }
+      if (qtyPlus) {
+        qtyPlus.addEventListener("click", () => {
+          if (!qtyNumber) return;
+          const current = parseInt(qtyNumber.value || "0", 10) || 0;
+          const next = current + 1;
+          qtyNumber.value = String(next);
+          scrollWheelToValue(next);
+        });
+      }
+
+      if (qtyWheel) {
+        qtyWheel.addEventListener("scroll", () => {
+          const bottom = qtyWheel.scrollTop + qtyWheel.clientHeight;
+          if (qtyWheelInner && bottom + 3 * (qtyWheelItemHeight || 32) > qtyWheelInner.scrollHeight) {
+            const existing = qtyWheelInner.querySelectorAll("[data-value]").length;
+            ensureWheelUpTo(existing + 50);
+          }
+          highlightWheelNearest();
+        });
+      }
+
+      if (qtyApply) {
+        qtyApply.addEventListener("click", () => {
+          if (!qtyModalItemId) return;
+          const target = qtyNumber ? parseInt(qtyNumber.value || "0", 10) || 0 : 0;
+          const delta = target - qtyModalOriginal;
+
+          // In "usedup" view: adjust locally and enable "确定" (no API call yet).
+          if (CURRENT_VIEW === "usedup") {
+            setUsedUpLocalQty(qtyModalItemId, target);
+            bootstrap.Modal.getOrCreateInstance(qtyModalEl).hide();
+            return;
+          }
+
+          // Other views: apply immediately via API.
+          fetch(`/item/${qtyModalItemId}/adjust`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-Requested-With": "XMLHttpRequest",
+              "Accept": "application/json",
+            },
+            body: `delta=${encodeURIComponent(delta)}`,
+          })
+            .then((r) => r.json())
+            .then((data) => {
+              if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "调整失败");
+              setQtyUI(qtyModalItemId, data.quantity, !!data.used_up);
+              qtyModalOriginal = Number(data.quantity || 0);
+              if (qtyCurrent) qtyCurrent.textContent = qtyModalOriginal.toFixed(2);
+              showToast("数量已更新");
+              bootstrap.Modal.getOrCreateInstance(qtyModalEl).hide();
+            })
+            .catch(() => window.location.reload());
+        });
+      }
+
+      // Inline adjust buttons (no reload, no scroll jump)
+      // Inline adjust buttons removed from UI (desktop/mobile quick +/-).
+
+      document.querySelectorAll('[data-action="custom"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const itemId = btn.getAttribute("data-item");
+          if (!itemId) return;
+          const form = document.getElementById("adjustForm");
+          const delta = document.getElementById("adjustDelta");
+          if (!form || !delta) return;
+          form.setAttribute("action", `/item/${itemId}/adjust`);
+          delta.value = "";
+          bootstrap.Modal.getOrCreateInstance(document.getElementById("adjustModal")).show();
+        });
+      });
+
+      // Used-up view: local adjust + confirm workflow
+      const usedUpPending = new Map();
+      const useUpModalEl = document.getElementById("useUpModal");
+      const useUpConfirmBtn = document.getElementById("useUpConfirmBtn");
+      let pendingUseUpForm = null;
+      let pendingUseUpItemId = null;
+
+      // 自定义“用完”确认弹窗，替代浏览器 confirm
+      window.fridgeUseUpConfirm = function (event) {
+        event.preventDefault();
+        const form = event.target;
+        pendingUseUpForm = form;
+        pendingUseUpItemId = null;
+        if (useUpModalEl) {
+          bootstrap.Modal.getOrCreateInstance(useUpModalEl).show();
+        } else {
+          // 兜底直接提交
+          form.submit();
+        }
+        return false;
+      };
+
+      if (useUpConfirmBtn) {
+        useUpConfirmBtn.addEventListener("click", () => {
+          if (useUpModalEl) {
+            const inst = bootstrap.Modal.getInstance(useUpModalEl);
+            if (inst) inst.hide();
+          }
+          if (pendingUseUpForm) {
+            const form = pendingUseUpForm;
+            pendingUseUpForm = null;
+            form.submit();
+            return;
+          }
+          if (pendingUseUpItemId) {
+            const itemId = pendingUseUpItemId;
+            pendingUseUpItemId = null;
+            fetch(`/item/${itemId}/mark-used-up`, {
+              method: "POST",
+              headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" },
+            })
+              .then((r) => r.json())
+              .then(() => window.location.reload())
+              .catch(() => window.location.reload());
+          }
+        });
+      }
+
+      function getOriginalFromConfirm(itemId) {
+        const btn = document.querySelector(`[data-action="usedup-confirm"][data-item="${itemId}"]`);
+        if (!btn) return 0;
+        return Number(btn.getAttribute("data-original") || "0");
+      }
+
+      function setConfirmState(itemId, pending) {
+        const btn = document.querySelector(`[data-action="usedup-confirm"][data-item="${itemId}"]`);
+        if (!btn) return;
+        const original = getOriginalFromConfirm(itemId);
+        const changed = Number(pending) !== Number(original);
+        btn.disabled = !changed;
+      }
+
+      function updateUsedUpMinusVisibility(itemId, pending) {
+        const minus = document.querySelector(`[data-action="usedup-local"][data-item="${itemId}"][data-delta="-1"]`);
+        if (!minus) return;
+        if (Number(pending) <= 0) {
+          minus.disabled = true;
+        } else {
+          minus.disabled = false;
+        }
+      }
+
+      function setUsedUpLocalQty(itemId, qty) {
+        const pending = Math.max(0, Number(qty || 0));
+        usedUpPending.set(itemId, pending);
+        setQtyUI(itemId, pending, true);
+        updateUsedUpMinusVisibility(itemId, pending);
+        setConfirmState(itemId, pending);
+      }
+
+      document.querySelectorAll('[data-action="usedup-local"]').forEach((btn) => {
+        btn.addEventListener("pointerdown", (e) => { try { e.preventDefault(); } catch (err) {} });
+        btn.addEventListener("click", () => {
+          if (CURRENT_VIEW !== "usedup") return;
+          const itemId = btn.getAttribute("data-item") || "";
+          const delta = Number(btn.getAttribute("data-delta") || "0");
+          if (!itemId || !Number.isFinite(delta)) return;
+          const original = getOriginalFromConfirm(itemId);
+          const current = usedUpPending.has(itemId) ? usedUpPending.get(itemId) : original;
+          const next = Math.max(0, Number(current || 0) + delta);
+          setUsedUpLocalQty(itemId, next);
+          try { btn.blur(); } catch (e) {}
+        });
+      });
+
+      document.querySelectorAll('[data-action="usedup-confirm"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (CURRENT_VIEW !== "usedup") return;
+          const itemId = btn.getAttribute("data-item") || "";
+          if (!itemId) return;
+          const original = getOriginalFromConfirm(itemId);
+          const pending = usedUpPending.has(itemId) ? usedUpPending.get(itemId) : original;
+          if (Number(pending) === Number(original)) return;
+          btn.disabled = true;
+
+          fetch(`/item/${itemId}/adjust`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-Requested-With": "XMLHttpRequest",
+              "Accept": "application/json",
+            },
+            body: `delta=${encodeURIComponent(Number(pending) - Number(original))}`,
+          })
+            .then((r) => r.json())
+            .then((data) => {
+              if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "调整失败");
+              window.location.reload();
+            })
+            .catch(() => window.location.reload());
+        });
+      });
+
+      // 批量选择与批量操作（桌面 + 移动）
+      const batchBar = document.getElementById("batchBar");
+      const batchCountEl = document.getElementById("batchCount");
+      const selectAllDesktop = document.getElementById("selectAllDesktop");
+      const btnBatchClear = document.getElementById("btnBatchClear");
+      const btnBatchUseUp = document.getElementById("btnBatchUseUp");
+      const btnBatchDelete = document.getElementById("btnBatchDelete");
+      const btnBatchToggle = document.getElementById("btnBatchToggle");
+      const btnBatchClose = document.getElementById("btnBatchClose");
+      const batchToggleText = document.getElementById("batchToggleText");
+      let batchMode = false;
+
+      function setBatchMode(on) {
+        batchMode = !!on;
+        document.body.classList.toggle("batch-off", !batchMode);
+        if (!batchMode) {
+          // Clear selections and hide bar
+          document.querySelectorAll(".item-select-desktop, .item-select-mobile").forEach((c) => {
+            c.checked = false;
+          });
+          if (selectAllDesktop) {
+            selectAllDesktop.checked = false;
+            selectAllDesktop.indeterminate = false;
+          }
+          if (batchBar) batchBar.classList.add("d-none");
+          if (batchCountEl) batchCountEl.textContent = "0";
+        } else {
+          syncCheckboxes();
+        }
+        if (btnBatchToggle) {
+          // In dropdown: keep it neutral, only update text.
+          if (batchToggleText) batchToggleText.textContent = batchMode ? "关闭批量选择" : "开启批量选择";
+        }
+      }
+
+      // Mobile card interaction:
+      // - Normal mode: tap card navigates to edit
+      // - Batch mode: tap card toggles checkbox
+      (function () {
+        const isInteractive = (el) => {
+          if (!el) return false;
+          return !!el.closest("a,button,input,select,textarea,label,form,.dropdown-menu,.dropdown-toggle");
+        };
+
+        document.querySelectorAll('.d-md-none [data-item-row][data-edit-href]').forEach((card) => {
+          card.style.cursor = "pointer";
+          card.addEventListener("click", (e) => {
+            if (isInteractive(e.target)) return;
+            const href = card.getAttribute("data-edit-href") || "";
+            if (!href) return;
+
+            if (batchMode) {
+              const id = card.getAttribute("data-item-row") || "";
+              if (!id) return;
+              const chk = card.querySelector(`.item-select-mobile[value="${id}"]`);
+              if (chk && !chk.disabled) {
+                chk.checked = !chk.checked;
+                syncCheckboxes();
+              }
+              return;
+            }
+
+            window.location.href = href;
+          });
+        });
+      })();
+
+      function getSelectedIds() {
+        const ids = new Set();
+        document.querySelectorAll(".item-select-desktop:checked, .item-select-mobile:checked").forEach((el) => {
+          const v = el.value || el.getAttribute("value");
+          if (v) ids.add(v);
+        });
+        return Array.from(ids);
+      }
+
+      function syncCheckboxes() {
+        if (!batchMode) return;
+        const ids = getSelectedIds();
+        const count = ids.length;
+        if (batchCountEl) batchCountEl.textContent = String(count);
+        if (batchBar) batchBar.classList.toggle("d-none", count === 0);
+        if (selectAllDesktop) {
+          const all = document.querySelectorAll(".item-select-desktop");
+          const allChecked = all.length > 0 && ids.length === all.length;
+          selectAllDesktop.checked = allChecked;
+          selectAllDesktop.indeterminate = !allChecked && ids.length > 0;
+        }
+      }
+
+      document.querySelectorAll(".item-select-desktop, .item-select-mobile").forEach((chk) => {
+        chk.addEventListener("change", syncCheckboxes);
+      });
+
+      if (btnBatchToggle) {
+        btnBatchToggle.addEventListener("click", () => setBatchMode(!batchMode));
+      }
+      if (btnBatchClose) {
+        btnBatchClose.addEventListener("click", () => setBatchMode(false));
+      }
+
+      if (selectAllDesktop) {
+        selectAllDesktop.addEventListener("change", () => {
+          if (!batchMode) return;
+          const checked = selectAllDesktop.checked;
+          document.querySelectorAll(".item-select-desktop").forEach((c) => {
+            c.checked = checked;
+          });
+          syncCheckboxes();
+        });
+      }
+
+      if (btnBatchClear) {
+        btnBatchClear.addEventListener("click", () => {
+          if (!batchMode) return;
+          document.querySelectorAll(".item-select-desktop, .item-select-mobile").forEach((c) => {
+            c.checked = false;
+          });
+          syncCheckboxes();
+        });
+      }
+
+      function runBatch(action) {
+        const ids = getSelectedIds();
+        if (!ids.length) return;
+        let msg = "";
+        if (action === "useup") {
+          msg = `确定将 ${ids.length} 个物品标记为已用完吗？`;
+        } else if (action === "delete") {
+          msg = `确定要删除这 ${ids.length} 个物品吗？此操作不可恢复。`;
+        }
+        if (msg && !window.confirm(msg)) return;
+
+        const tasks = ids.map((id) => {
+          let url = "";
+          if (action === "useup") {
+            url = `/item/${id}/use-up`;
+          } else if (action === "delete") {
+            url = `/item/${id}/delete`;
+          }
+          if (!url) return Promise.resolve();
+          return fetch(url, {
+            method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          }).catch(() => {});
+        });
+
+        Promise.all(tasks).then(() => {
+          window.location.reload();
+        });
+      }
+
+      if (btnBatchUseUp) {
+        btnBatchUseUp.addEventListener("click", () => runBatch("useup"));
+      }
+      if (btnBatchDelete) {
+        btnBatchDelete.addEventListener("click", () => runBatch("delete"));
+      }
+
+      // 初始同步一次，确保刷新后批量栏状态正确
+      setBatchMode(false);
+    })();
+  </script>
+{% endblock %}

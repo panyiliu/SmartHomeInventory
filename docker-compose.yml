@@ -1,0 +1,32 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fridge-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist SQLite DB + settings (instance/fridge.db)
+      - ./instance:/app/instance
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: fridge-nginx
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${NGINX_PORT_HTTP:-80}:80"
+      - "${NGINX_PORT_HTTPS:-443}:443"
+    volumes:
+      - ./ops/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ops/certs:/etc/nginx/certs:ro
+

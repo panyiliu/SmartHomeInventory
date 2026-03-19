@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑提示词' if not is_new else '新增提示词' }}{% endblock %}
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
+    <div>
+      <h4 class="mb-1">{{ '编辑提示词' if not is_new else '新增提示词' }}</h4>
+      <div class="text-muted small">编辑后会影响后端“真实调用”提示词（若当前调用对应 category_code）。</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('ai_prompts.ai_prompts_list') }}">返回列表</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if prompt %}
+        <form method="post" action="{{ url_for('ai_prompts.ai_prompts_edit', prompt_id=prompt.id) }}">
+      {% else %}
+        <form method="post" action="{{ url_for('ai_prompts.ai_prompts_new') }}">
+      {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label">category_code</label>
+            <input class="form-control mono" name="category_code" value="{{ prompt.category_code if prompt else (request.args.get('category_code','') or 'vision_recognize') }}" required />
+            <div class="form-text">系统预置：vision_recognize / text_extract / interface_test</div>
+          </div>
+          <div class="col-12 col-md-8">
+            <label class="form-label">提示词名称</label>
+            <input class="form-control" name="name" value="{{ prompt.name if prompt else '' }}" required />
+          </div>
+          <div class="col-12">
+            <label class="form-label">提示词内容</label>
+            <textarea class="form-control mono" name="content" rows="16" required>{{ prompt.content if prompt else '' }}</textarea>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="is_default" {% if prompt and prompt.is_default %}checked{% endif %}>
+              <label class="form-check-label">设为默认（同 category_code 下只有一个）</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap mt-3">
+          <button class="btn btn-primary" type="submit">保存</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('ai_prompts.ai_prompts_list') }}">取消</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+

@@ -1,0 +1,1708 @@
+{% extends "base.html" %}
+{% block title %}新增 - 小仓屋{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <a class="text-decoration-none text-muted small" href="{{ url_for('main.index') }}"><i class="bi bi-arrow-left me-1"></i>返回列表</a>
+          <div class="mt-1">
+            <h4 class="mb-0 fw-semibold">新增项目</h4>
+            <div class="text-muted small">把新鲜食材记下来，随时掌握库存。</div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#scanModal">
+            <i class="bi bi-upc-scan me-1"></i>扫码添加
+          </button>
+          <input id="aiImageInput" type="file" accept="image/*" capture="environment" class="d-none" />
+        </div>
+      </div>
+
+      <ul class="nav nav-pills mb-3 flex-wrap gap-2" id="addTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-ai-text" data-bs-toggle="pill" data-bs-target="#pane-ai-text" type="button" role="tab" aria-controls="pane-ai-text" aria-selected="true">
+            <i class="bi bi-chat-left-text me-1"></i>AI 文本录入
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-ai-photo" data-bs-toggle="pill" data-bs-target="#pane-ai-photo" type="button" role="tab" aria-controls="pane-ai-photo" aria-selected="false">
+            <i class="bi bi-camera me-1"></i>AI 拍照识别
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-manual" data-bs-toggle="pill" data-bs-target="#pane-manual" type="button" role="tab" aria-controls="pane-manual" aria-selected="false">
+            <i class="bi bi-pencil-square me-1"></i>手动新增
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="pane-ai-text" role="tabpanel" aria-labelledby="tab-ai-text">
+          <div class="p-3 rounded-4 mb-3" style="background: rgba(16,24,40,.03); border: 1px solid rgba(16,24,40,.08);">
+            <div class="fw-semibold mb-2">AI 文本录入</div>
+            <div class="text-muted small mb-2">只做三步：输入 → 识别 → 确认加入。</div>
+            <textarea id="aiTextInput" class="form-control" rows="4" placeholder="例如：我今天吃了苹果，还买了牛奶、面包，都放冰箱里了"></textarea>
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+              <button id="aiTextParseBtn" type="button" class="btn btn-primary">
+                <i class="bi bi-magic me-1"></i>一键解析
+              </button>
+              <button id="aiTextClearBtn" type="button" class="btn btn-outline-secondary">清空</button>
+            </div>
+          </div>
+
+          <div id="aiPendingPanelText" class="mb-3 d-none">
+            <div class="p-3 rounded-4" style="background: rgba(46,125,50,.06); border: 1px solid rgba(46,125,50,.18);">
+              <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div class="fw-semibold">待确认：<span id="aiPendingCountText" class="mono">0</span> 项</div>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button id="aiPendingAddSelectedBtnText" type="button" class="btn btn-primary btn-sm">
+                    <i class="bi bi-check2-circle me-1"></i>加入已勾选
+                  </button>
+                  <button id="aiPendingClearBtnText" type="button" class="btn btn-outline-secondary btn-sm">清空</button>
+                </div>
+              </div>
+              <div id="aiPendingListText" class="mt-3 d-flex flex-column gap-2"></div>
+              <div class="form-text mt-2">AI 模式不显示手动表单字段；如需精细调整，请切换到“手动新增”。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="pane-ai-photo" role="tabpanel" aria-labelledby="tab-ai-photo">
+          <div class="p-3 rounded-4 mb-3" style="background: rgba(16,24,40,.03); border: 1px solid rgba(16,24,40,.08);">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <div>
+                <div class="fw-semibold">AI 拍照识别</div>
+                <div class="text-muted small">只做三步：选择图片 → 识别 → 确认加入。</div>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary" type="button" id="aiRecognizeBtn2">
+                  <i class="bi bi-stars me-1"></i>选择图片识别
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="aiPendingPanelPhoto" class="mb-3 d-none">
+            <div class="p-3 rounded-4" style="background: rgba(46,125,50,.06); border: 1px solid rgba(46,125,50,.18);">
+              <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div class="fw-semibold">待确认：<span id="aiPendingCountPhoto" class="mono">0</span> 项</div>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button id="aiPendingAddSelectedBtnPhoto" type="button" class="btn btn-primary btn-sm">
+                    <i class="bi bi-check2-circle me-1"></i>加入已勾选
+                  </button>
+                  <button id="aiPendingClearBtnPhoto" type="button" class="btn btn-outline-secondary btn-sm">清空</button>
+                </div>
+              </div>
+              <div id="aiPendingListPhoto" class="mt-3 d-flex flex-column gap-2"></div>
+              <div class="form-text mt-2">AI 模式不显示手动表单字段；如需精细调整，请切换到“手动新增”。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="pane-manual" role="tabpanel" aria-labelledby="tab-manual">
+          <div class="p-3 rounded-4 mb-3" style="background: rgba(16,24,40,.03); border: 1px solid rgba(16,24,40,.08);">
+            <div class="fw-semibold">手动新增</div>
+            <div class="text-muted small">适合精确录入或修正 AI 识别结果。</div>
+          </div>
+
+          <form id="itemForm" class="row g-4 has-sticky-actions" autocomplete="off">
+            <div class="col-12 col-md-6">
+              <label class="form-label">名称<span class="req">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-egg-fried"></i></span>
+                <input id="nameInput" class="form-control" name="name" required placeholder="例：鸡蛋、牛奶、生抽" list="nameSuggest" />
+              </div>
+              <div class="form-text">输入时会从历史记录中联想，并自动填充常用信息。</div>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">数量<span class="req">*</span></label>
+              <div class="input-group">
+                <button class="btn btn-outline-secondary" type="button" id="qtyMinusBtn"><i class="bi bi-dash-lg"></i></button>
+                <input class="form-control mono text-center" type="number" inputmode="decimal" step="0.5" min="0" name="quantity" id="quantityInput" required value="1" />
+                <button class="btn btn-outline-secondary" type="button" id="qtyPlusBtn"><i class="bi bi-plus-lg"></i></button>
+              </div>
+              <div class="form-text">支持小数（例如 0.5）；可点击左右按钮调整。</div>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label text-muted">单位</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
+                <input class="form-control" name="unit" value="份" list="unitOptions" placeholder="例：个 / 包 / 克 / ml / 瓶" />
+              </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label text-muted">分类</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-tag"></i></span>
+                <input type="hidden" name="category" id="categoryValue" value="其他" />
+                <select class="form-select d-none d-md-block" id="categorySelect">
+                  {% for v in category_options %}
+                    <option value="{{ v }}" {% if v == '其他' %}selected{% endif %}>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="d-md-none mt-2 chip-row wrap" id="categoryChips">
+                {% for v in category_options %}
+                  <button class="chip {% if v == '其他' %}active{% endif %}" type="button" data-value="{{ v }}">{{ v }}</button>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label text-muted">位置</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-snow2"></i></span>
+                <input type="hidden" name="location" id="locationValue" value="冰箱" />
+                <select class="form-select d-none d-md-block" id="locationSelect">
+                  {% for v in location_options %}
+                    <option value="{{ v }}" {% if v == '冰箱' %}selected{% endif %}>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="d-md-none mt-2 chip-row wrap" id="locationChips">
+                {% for v in location_options %}
+                  <button class="chip {% if v == '冰箱' %}active{% endif %}" type="button" data-value="{{ v }}">{{ v }}</button>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label text-muted">备注</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
+                <input class="form-control" name="note" placeholder="例：保质期、品牌、开封日期" />
+              </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label text-muted">保质期（天）</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
+                <input class="form-control mono" type="number" inputmode="numeric" step="1" min="0" name="shelf_life_days" placeholder="可留空，例如：7 / 30 / 180" />
+              </div>
+              <div class="form-text">从录入当天开始计算“已存放/剩余天数”。</div>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label text-muted">收录日期</label>
+              <div class="input-group">
+                <span class="input-group-text" aria-hidden="true"><i class="bi bi-calendar-event"></i></span>
+                <input class="form-control" type="date" name="record_date" value="{{ today }}" />
+              </div>
+              <div class="form-text">默认是今天；可选择实际入库日期，用于计算“已存放/剩余天数”。</div>
+            </div>
+
+            <datalist id="unitOptions">
+              <option value="个"></option>
+              <option value="盒"></option>
+              <option value="包"></option>
+              <option value="袋"></option>
+              <option value="瓶"></option>
+              <option value="罐"></option>
+              <option value="克"></option>
+              <option value="千克"></option>
+              <option value="ml"></option>
+              <option value="L"></option>
+              <option value="份"></option>
+            </datalist>
+            <datalist id="nameSuggest"></datalist>
+
+            <div class="col-12 sticky-actions d-flex flex-column flex-md-row gap-3 mt-1">
+              <button id="submitBtn" class="btn btn-primary" type="submit">
+                <span class="btn-label"><i class="bi bi-check2-circle me-1"></i>确认加入</span>
+                <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>加入中...</span>
+              </button>
+              <button id="resetDraftBtn" class="btn btn-outline-secondary" type="button"><i class="bi bi-eraser me-1"></i>清空表单</button>
+              <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}"><i class="bi bi-x-circle me-1"></i>返回列表</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="addedPanel" class="mt-4">
+        <div class="p-3 rounded-4" style="background: rgba(16,24,40,.03); border: 1px solid rgba(16,24,40,.08);">
+          <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div class="fw-semibold">已添加（本次）：<span id="addedCount" class="mono">0</span> 项</div>
+            <a class="btn btn-outline-primary btn-sm" href="{{ url_for('main.index') }}"><i class="bi bi-list-check me-1"></i>去库存查看</a>
+          </div>
+          <div id="addedList" class="mt-3 d-flex flex-column gap-2"></div>
+          <div id="addedEmptyHint" class="text-muted small mt-2">还没有加入任何物品。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="scanModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-upc-scan me-2"></i>摄像头扫码</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body position-relative">
+          <div class="row g-3">
+            <div class="col-12 col-lg-7">
+              <div id="qr-reader" class="rounded-4 overflow-hidden" style="width: 100%; background: rgba(0,0,0,.04); border: 1px solid rgba(16,24,40,.08);">
+                <video id="scanVideo" playsinline muted style="width: 100%; display: block;"></video>
+              </div>
+              <div class="form-text mt-2">
+                若浏览器弹出权限对话框，请点击“允许”。如果没弹出，请查看地址栏旁的摄像头图标权限设置。
+              </div>
+            </div>
+            <div class="col-12 col-lg-5">
+              <div class="p-3 rounded-4" style="background: rgba(46,125,50,.06); border: 1px solid rgba(46,125,50,.18);">
+                <div class="fw-semibold mb-2">扫码结果</div>
+                <div id="scanStatus" class="text-muted small">准备就绪。正在尝试启动摄像头，请将条码对准取景框。</div>
+                <div class="small mt-2">
+                  <div class="text-muted">流程：</div>
+                  <ol class="mb-0 text-muted">
+                    <li id="stepPerm">请求权限</li>
+                    <li id="stepOpen">打开预览</li>
+                    <li id="stepScan">开始识别</li>
+                  </ol>
+                </div>
+
+                <div class="mt-3 d-grid gap-2">
+                  <a class="btn btn-primary" href="{{ url_for('main.index') }}"><i class="bi bi-list-check me-1"></i>去主页查看库存</a>
+                </div>
+              </div>
+              <div class="small text-muted mt-2">
+                规则：每次扫码默认 +1；如果同一条码重复扫码，会自动累计数量。
+              </div>
+
+              <div class="mt-3">
+                <div class="fw-semibold mb-2">手动输入条码（兜底）</div>
+                <div class="input-group">
+                  <span class="input-group-text" aria-hidden="true"><i class="bi bi-upc"></i></span>
+                  <input id="manualBarcodeInput" class="form-control mono" placeholder="例如：6901236341384" inputmode="numeric" />
+                </div>
+                <div class="form-text">摄像头不可用或识别失败时，可将条码复制到上方表单中手动录入商品信息。</div>
+              </div>
+
+              <div class="mt-3">
+                <div class="fw-semibold mb-2">权限/地址快速操作</div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button id="copyLocalUrlBtn" type="button" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-clipboard me-1"></i>复制本机访问地址
+                  </button>
+                  <button id="copyThisUrlBtn" type="button" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-clipboard-check me-1"></i>复制当前页面地址
+                  </button>
+                </div>
+                <div id="urlHint" class="form-text mt-2"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="scanHitOverlay" class="d-none" style="position:absolute; inset: 0; display:flex; align-items:center; justify-content:center; padding: 1rem; background: rgba(17,24,39,.40); backdrop-filter: blur(4px);">
+            <div class="card w-100" style="max-width: 520px; border-radius: 1.25rem;">
+              <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <span id="scanHitIcon" class="text-success fs-4"><i class="bi bi-check-circle-fill"></i></span>
+                  <div id="scanHitTitle" class="fw-semibold fs-5">已识别并入库</div>
+                </div>
+                <div class="fs-4 fw-semibold" id="scanHitName">-</div>
+                <div class="text-muted mt-2" id="scanHitMeta">-</div>
+                <div class="d-grid gap-2 mt-4">
+                  <button id="scanHitNextBtn" type="button" class="btn btn-success btn-lg">
+                    <i class="bi bi-skip-forward-circle me-1"></i>继续扫描下一个
+                  </button>
+                  <button id="scanHitDoneBtn" type="button" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-upc me-1"></i>手动录入条码
+                  </button>
+                  <button id="scanHitManualAddBtn" type="button" class="btn btn-outline-primary btn-lg">
+                    <i class="bi bi-pencil-square me-1"></i>手动添加商品信息
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="aiModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1.25rem;">
+        <div class="modal-body p-4">
+          <div class="d-flex align-items-center gap-3">
+            <div class="spinner-border text-success" role="status" aria-hidden="true"></div>
+            <div>
+              <div class="fw-semibold">正在识别图片…</div>
+              <div class="text-muted small">请稍候，识别结果会自动回填到表单。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Shared toast helper
+      function toast(msg, kind) {
+        const el = document.createElement("div");
+        el.className = `alert alert-${kind || "success"} d-flex align-items-start gap-2 position-fixed`;
+        el.style.right = "16px";
+        el.style.bottom = "16px";
+        el.style.zIndex = "2000";
+        el.style.maxWidth = "min(520px, calc(100vw - 32px))";
+        el.innerHTML = `<div class="flex-grow-1">${msg}</div><button type="button" class="btn-close" aria-label="Close"></button>`;
+        document.body.appendChild(el);
+        const close = () => { try { el.remove(); } catch (e) {} };
+        el.querySelector(".btn-close")?.addEventListener("click", close);
+        window.setTimeout(close, 3200);
+      }
+
+      // "Added (this session)" panel is shared across modes.
+      let added = []; // {item_id, name, quantity, unit, category, location}
+      const addedListEl = document.getElementById("addedList");
+      const addedCountEl = document.getElementById("addedCount");
+      const addedEmptyHint = document.getElementById("addedEmptyHint");
+
+      function renderAdded() {
+        if (!addedListEl || !addedCountEl || !addedEmptyHint) return;
+        addedCountEl.textContent = String(added.length);
+        addedListEl.innerHTML = "";
+        addedEmptyHint.classList.toggle("d-none", added.length > 0);
+        added.forEach((it) => {
+          const row = document.createElement("div");
+          row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2";
+          row.setAttribute("data-item-id", String(it.item_id));
+          row.innerHTML = `
+            <div class="flex-grow-1" style="min-width:0;">
+              <div class="fw-semibold text-truncate">${it.name}</div>
+              <div class="text-muted small">${it.quantity}${it.unit ? " " + it.unit : ""} · ${it.category || "其他"} · ${it.location || "冰箱"}</div>
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-sm" data-role="del"><i class="bi bi-trash"></i></button>
+          `;
+          addedListEl.appendChild(row);
+        });
+      }
+
+      addedListEl && addedListEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest('[data-role="del"]');
+        if (!btn) return;
+        const row = btn.closest("[data-item-id]");
+        const itemId = row ? Number(row.getAttribute("data-item-id")) : null;
+        if (!itemId) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/api/items/${itemId}/delete-json`, { method: "POST", headers: { "Accept": "application/json" } });
+          const data = await r.json();
+          if (!data || !data.ok) throw new Error();
+          added = added.filter((x) => x.item_id !== itemId);
+          renderAdded();
+          toast("已删除", "warning");
+        } catch (err) {
+          toast("删除失败，请稍后重试", "danger");
+          btn.disabled = false;
+        }
+      });
+
+      async function apiAddOne(payload) {
+        const r = await fetch("/api/items/add-one", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "加入失败");
+        return data.item_id;
+      }
+
+      // ---------------------------
+      // Manual mode ("精录")
+      // ---------------------------
+      (function initManual() {
+        const form = document.getElementById("itemForm");
+        const submitBtn = document.getElementById("submitBtn");
+        const resetBtn = document.getElementById("resetDraftBtn");
+        const nameInput = document.getElementById("nameInput");
+        const qtyInput = document.getElementById("quantityInput");
+        const unitInput = document.querySelector('[name="unit"]');
+        const noteInput = document.querySelector('[name="note"]');
+        const shelfInput = document.querySelector('[name="shelf_life_days"]');
+        const nameSuggest = document.getElementById("nameSuggest");
+        if (!form || !submitBtn || !nameInput || !qtyInput) return;
+
+        // Suggest + autofill
+        let last = [];
+        let t = null;
+        async function fetchSuggest(q) {
+          const r = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
+          return await r.json();
+        }
+        function fillFrom(item) {
+          const setVal = (fieldName, v) => {
+            const el = document.querySelector(`[name="${fieldName}"]`);
+            if (el && (el.value === "" || el.value === "其他" || el.value === "冰箱" || el.value === "份")) el.value = v ?? el.value;
+          };
+          setVal("category", item.category);
+          setVal("unit", item.unit);
+          setVal("location", item.location);
+          if (item.shelf_life_days !== null && item.shelf_life_days !== undefined) {
+            const el = document.querySelector(`[name="shelf_life_days"]`);
+            if (el && el.value === "") el.value = item.shelf_life_days;
+          }
+        }
+        nameInput.addEventListener("input", () => {
+          const q = nameInput.value.trim();
+          if (t) window.clearTimeout(t);
+          if (!q) return;
+          t = window.setTimeout(async () => {
+            last = await fetchSuggest(q);
+            if (nameSuggest) nameSuggest.innerHTML = last.map((x) => `<option value="${x.name}"></option>`).join("");
+          }, 150);
+        });
+        nameInput.addEventListener("change", () => {
+          const v = nameInput.value.trim();
+          const hit = last.find((x) => x.name === v);
+          if (hit) fillFrom(hit);
+        });
+
+        // Qty +/- buttons
+        const minusBtn = document.getElementById("qtyMinusBtn");
+        const plusBtn = document.getElementById("qtyPlusBtn");
+        function parseVal() {
+          const v = parseFloat(qtyInput.value || "0");
+          return isNaN(v) ? 0 : v;
+        }
+        minusBtn && minusBtn.addEventListener("click", () => { qtyInput.value = String(Math.max(0, parseVal() - 1)); });
+        plusBtn && plusBtn.addEventListener("click", () => { qtyInput.value = String(parseVal() + 1); });
+
+        // Mobile chips sync
+        (function () {
+          const catValue = document.getElementById("categoryValue");
+          const locValue = document.getElementById("locationValue");
+          const catSelect = document.getElementById("categorySelect");
+          const locSelect = document.getElementById("locationSelect");
+          const catChips = document.getElementById("categoryChips");
+          const locChips = document.getElementById("locationChips");
+          function setActive(container, v) {
+            if (!container) return;
+            container.querySelectorAll(".chip").forEach((b) => {
+              if (b.getAttribute("data-value") === v) b.classList.add("active");
+              else b.classList.remove("active");
+            });
+          }
+          function setCategory(v) {
+            if (catValue) catValue.value = v;
+            if (catSelect) catSelect.value = v;
+            setActive(catChips, v);
+          }
+          function setLocation(v) {
+            if (locValue) locValue.value = v;
+            if (locSelect) locSelect.value = v;
+            setActive(locChips, v);
+          }
+          if (catSelect) setCategory(catSelect.value || (catValue ? catValue.value : "其他"));
+          if (locSelect) setLocation(locSelect.value || (locValue ? locValue.value : "冰箱"));
+          catSelect && catSelect.addEventListener("change", () => setCategory(catSelect.value));
+          locSelect && locSelect.addEventListener("change", () => setLocation(locSelect.value));
+          catChips && catChips.addEventListener("click", (e) => {
+            const btn = e.target.closest(".chip");
+            if (!btn) return;
+            setCategory(btn.getAttribute("data-value") || "其他");
+          });
+          locChips && locChips.addEventListener("click", (e) => {
+            const btn = e.target.closest(".chip");
+            if (!btn) return;
+            setLocation(btn.getAttribute("data-value") || "冰箱");
+          });
+        })();
+
+        function clearDraft(keepDefaults) {
+          nameInput.value = "";
+          qtyInput.value = "1";
+          if (noteInput) noteInput.value = "";
+          if (shelfInput) shelfInput.value = "";
+          if (!keepDefaults) {
+            const catSelect = document.getElementById("categorySelect");
+            const locSelect = document.getElementById("locationSelect");
+            if (catSelect) catSelect.value = "其他";
+            if (locSelect) locSelect.value = "冰箱";
+            const catValue = document.getElementById("categoryValue");
+            const locValue = document.getElementById("locationValue");
+            if (catValue) catValue.value = "其他";
+            if (locValue) locValue.value = "冰箱";
+          }
+          try { nameInput.focus(); } catch (e) {}
+        }
+        resetBtn && resetBtn.addEventListener("click", () => clearDraft(true));
+
+        function getManualPayload() {
+          const name = (nameInput.value || "").trim();
+          const qty = Math.max(0, parseInt(String(qtyInput.value || "0"), 10) || 0);
+          const category = (document.getElementById("categoryValue")?.value || "其他").trim() || "其他";
+          const location = (document.getElementById("locationValue")?.value || "冰箱").trim() || "冰箱";
+          const unit = (unitInput && unitInput.value) ? unitInput.value : "份";
+          const note = (noteInput && noteInput.value) ? noteInput.value : "";
+          return { name, quantity: qty, category, location, unit, note };
+        }
+
+        async function addManual() {
+          const payload = getManualPayload();
+          if (!payload.name) {
+            toast("名称不能为空", "danger");
+            try { nameInput.focus(); } catch (e) {}
+            return;
+          }
+          submitBtn.disabled = true;
+          submitBtn.querySelector(".btn-label")?.classList.add("d-none");
+          submitBtn.querySelector(".btn-loading")?.classList.remove("d-none");
+          try {
+            const itemId = await apiAddOne(payload);
+            added.unshift({ item_id: itemId, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
+            renderAdded();
+            clearDraft(true);
+            toast(`已加入：${payload.name}`, "success");
+          } catch (e) {
+            toast((e && e.message) ? e.message : "加入库存失败，请稍后重试", "danger");
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.querySelector(".btn-label")?.classList.remove("d-none");
+            submitBtn.querySelector(".btn-loading")?.classList.add("d-none");
+          }
+        }
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          addManual();
+        });
+      })();
+
+      // ---------------------------
+      // AI mode ("快录"): input -> recognize -> confirm
+      // ---------------------------
+      function normalizeAiItem(raw) {
+        const it = raw && typeof raw === "object" ? raw : {};
+        const name = String(it.name || "").trim();
+        const category = String(it.category || "").trim();
+        const location = String(it.location || "").trim();
+        let quantity = 0;
+        if (typeof it.quantity === "number") quantity = it.quantity;
+        else if (it.quantity !== undefined && it.quantity !== null) {
+          const n = parseInt(String(it.quantity), 10);
+          quantity = Number.isNaN(n) ? 0 : n;
+        }
+        quantity = Math.max(0, Math.round(quantity));
+        return { name, quantity, category, location };
+      }
+
+      async function addAiItem(it) {
+        const payload = {
+          name: it.name,
+          quantity: it.quantity || 1,
+          category: it.category || "其他",
+          location: it.location || "冰箱",
+          unit: "份",
+          note: "",
+        };
+        const itemId = await apiAddOne(payload);
+        added.unshift({ item_id: itemId, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
+        renderAdded();
+      }
+
+      function initAiPanel(opts) {
+        const panelEl = document.getElementById(opts.panelId);
+        const listEl = document.getElementById(opts.listId);
+        const countEl = document.getElementById(opts.countId);
+        const addSelectedBtn = document.getElementById(opts.addSelectedBtnId);
+        const clearBtn = document.getElementById(opts.clearBtnId);
+        if (!panelEl || !listEl || !countEl) return null;
+
+        let pending = []; // {id, name, quantity, category, location, picked, added}
+
+        function render() {
+          const alive = pending.filter((x) => !x.added);
+          countEl.textContent = String(alive.length);
+          if (!alive.length) {
+            panelEl.classList.add("d-none");
+            listEl.innerHTML = "";
+            return;
+          }
+          panelEl.classList.remove("d-none");
+          listEl.innerHTML = "";
+          alive.forEach((it) => {
+            const row = document.createElement("div");
+            row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2";
+            row.setAttribute("data-id", String(it.id));
+            row.innerHTML = `
+              <input class="form-check-input" type="checkbox" data-role="pick" ${it.picked ? "checked" : ""} />
+              <div class="flex-grow-1" style="min-width:0;">
+                <div class="fw-semibold text-truncate">${it.name || "（未命名）"}</div>
+                <div class="text-muted small">${it.quantity} · ${(it.category || "其他")} · ${(it.location || "冰箱")}</div>
+              </div>
+              <button type="button" class="btn btn-outline-primary btn-sm" data-role="add">加入</button>
+            `;
+            listEl.appendChild(row);
+          });
+        }
+
+        listEl.addEventListener("click", async (e) => {
+          const pick = e.target.closest('[data-role="pick"]');
+          if (pick) {
+            const row = pick.closest("[data-id]");
+            const id = row ? Number(row.getAttribute("data-id")) : null;
+            const it = pending.find((x) => x.id === id);
+            if (it) it.picked = !!pick.checked;
+            return;
+          }
+          const addBtn = e.target.closest('[data-role="add"]');
+          if (addBtn) {
+            const row = addBtn.closest("[data-id]");
+            const id = row ? Number(row.getAttribute("data-id")) : null;
+            const it = pending.find((x) => x.id === id);
+            if (!it || it.added) return;
+            addBtn.disabled = true;
+            try {
+              await addAiItem(it);
+              it.added = true;
+              render();
+              toast(`已加入：${it.name}`, "success");
+            } catch (err) {
+              toast((err && err.message) ? err.message : "加入失败，请稍后重试", "danger");
+              addBtn.disabled = false;
+            }
+          }
+        });
+
+        addSelectedBtn && addSelectedBtn.addEventListener("click", async () => {
+          const selected = pending.filter((x) => x.picked && !x.added);
+          if (!selected.length) return;
+          for (const it of selected) {
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              await addAiItem(it);
+              it.added = true;
+            } catch (err) {
+              toast((err && err.message) ? err.message : `加入失败：${it.name}`, "danger");
+              break;
+            }
+          }
+          render();
+          toast("已加入已勾选项目", "success");
+        });
+
+        clearBtn && clearBtn.addEventListener("click", () => {
+          pending = [];
+          render();
+        });
+
+        function setPending(list) {
+          pending = (list || []).map((x, i) => ({ id: Date.now() + i, ...x, picked: true, added: false }));
+          render();
+        }
+
+        render();
+        return { setPending };
+      }
+
+      const aiTextPanel = initAiPanel({
+        panelId: "aiPendingPanelText",
+        listId: "aiPendingListText",
+        countId: "aiPendingCountText",
+        addSelectedBtnId: "aiPendingAddSelectedBtnText",
+        clearBtnId: "aiPendingClearBtnText",
+      });
+      const aiPhotoPanel = initAiPanel({
+        panelId: "aiPendingPanelPhoto",
+        listId: "aiPendingListPhoto",
+        countId: "aiPendingCountPhoto",
+        addSelectedBtnId: "aiPendingAddSelectedBtnPhoto",
+        clearBtnId: "aiPendingClearBtnPhoto",
+      });
+
+      // AI text
+      const aiTextInput = document.getElementById("aiTextInput");
+      const aiTextParseBtn = document.getElementById("aiTextParseBtn");
+      const aiTextClearBtn = document.getElementById("aiTextClearBtn");
+      aiTextParseBtn && aiTextParseBtn.addEventListener("click", async () => {
+        const text = (aiTextInput && aiTextInput.value ? aiTextInput.value : "").trim();
+        if (!text) {
+          toast("请输入要解析的文本", "warning");
+          return;
+        }
+        const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+        // 临时调整提示文案为“解析文本”
+        if (aiModalEl) {
+          const titleEl = aiModalEl.querySelector(".fw-semibold");
+          const descEl = aiModalEl.querySelector(".text-muted.small");
+          if (titleEl) titleEl.textContent = "正在解析文本…";
+          if (descEl) descEl.textContent = "请稍候，识别结果会自动出现在下方待确认列表。";
+        }
+        try { modal?.show(); } catch (e) {}
+        aiTextParseBtn.disabled = true;
+        try {
+          const r = await fetch("/api/ai/parse-text", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "解析失败");
+          const arr = Array.isArray(data.data) ? data.data : [];
+          const list = arr.map(normalizeAiItem).filter((x) => x.name);
+          if (!list.length) {
+            toast("未识别到物品，可手动新增", "warning");
+            return;
+          }
+          aiTextPanel && aiTextPanel.setPending(list);
+          toast(`成功识别到 ${list.length} 项`, "success");
+        } catch (e) {
+          toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+        } finally {
+          aiTextParseBtn.disabled = false;
+          try { modal?.hide(); } catch (e) {}
+        }
+      });
+      aiTextClearBtn && aiTextClearBtn.addEventListener("click", () => {
+        if (aiTextInput) aiTextInput.value = "";
+      });
+
+      // AI photo
+      const aiBtn = document.getElementById("aiRecognizeBtn2");
+      const aiInput = document.getElementById("aiImageInput");
+      const aiModalEl = document.getElementById("aiModal");
+      if (aiBtn && aiInput) {
+        aiBtn.addEventListener("click", () => aiInput.click());
+        aiInput.addEventListener("change", async () => {
+          const file = aiInput.files && aiInput.files[0] ? aiInput.files[0] : null;
+          if (!file) return;
+          const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+          try { modal?.show(); } catch (e) {}
+          try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const r = await fetch("/api/ai/recognize-food", { method: "POST", body: fd });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "识别失败");
+            const arr = Array.isArray(data.data) ? data.data : [];
+            const list = arr.map(normalizeAiItem).filter((x) => x.name);
+            if (!list.length) {
+              toast("未识别到物品，可手动新增", "warning");
+              return;
+            }
+            aiPhotoPanel && aiPhotoPanel.setPending(list);
+            toast(`成功识别到 ${list.length} 项`, "success");
+          } catch (e) {
+            toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+          } finally {
+            try { modal?.hide(); } catch (e) {}
+            aiInput.value = "";
+          }
+        });
+      }
+
+      // init
+      renderAdded();
+      window.__fridgeToast = toast; // for optional future use
+    })();
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    (function () {
+      const aiBtn = document.getElementById("aiRecognizeBtn2");
+      const aiInput = document.getElementById("aiImageInput");
+      const aiModalEl = document.getElementById("aiModal");
+
+      const aiTextInput = document.getElementById("aiTextInput");
+      const aiTextParseBtn = document.getElementById("aiTextParseBtn");
+      const aiTextClearBtn = document.getElementById("aiTextClearBtn");
+
+      const pendingPanel = document.getElementById("aiPendingPanel");
+      const pendingListEl = document.getElementById("aiPendingList");
+      const pendingCountEl = document.getElementById("aiPendingCount");
+      const pendingAddSelectedBtn = document.getElementById("aiPendingAddSelectedBtn");
+      const pendingClearBtn = document.getElementById("aiPendingClearBtn");
+
+      const form = document.getElementById("itemForm");
+      const submitBtn = document.getElementById("submitBtn");
+      const resetBtn = document.getElementById("resetDraftBtn");
+      const nameInput = document.getElementById("nameInput");
+      const qtyInput = document.getElementById("quantityInput");
+      const unitInput = document.querySelector('[name="unit"]');
+      const noteInput = document.querySelector('[name="note"]');
+      const shelfInput = document.querySelector('[name="shelf_life_days"]');
+
+      const addedListEl = document.getElementById("addedList");
+      const addedCountEl = document.getElementById("addedCount");
+      const addedEmptyHint = document.getElementById("addedEmptyHint");
+
+      if (!form || !submitBtn || !nameInput || !qtyInput) return;
+
+      let pending = []; // {id, name, quantity, category, location, status, picked, added}
+      let currentPendingId = null;
+      let added = []; // {item_id, name, quantity, unit, category, location}
+
+      function toast(msg, kind) {
+        const el = document.createElement("div");
+        el.className = `alert alert-${kind || "success"} d-flex align-items-start gap-2 position-fixed`;
+        el.style.right = "16px";
+        el.style.bottom = "16px";
+        el.style.zIndex = "2000";
+        el.style.maxWidth = "min(520px, calc(100vw - 32px))";
+        el.innerHTML = `<div class="flex-grow-1">${msg}</div><button type="button" class="btn-close" aria-label="Close"></button>`;
+        document.body.appendChild(el);
+        const close = () => { try { el.remove(); } catch (e) {} };
+        el.querySelector(".btn-close")?.addEventListener("click", close);
+        window.setTimeout(close, 3200);
+      }
+
+      function normalizeItem(raw) {
+        const it = raw && typeof raw === "object" ? raw : {};
+        const name = String(it.name || "").trim();
+        const category = String(it.category || "").trim();
+        const location = String(it.location || "").trim();
+        const status = String(it.status || "").trim();
+        let quantity = 0;
+        if (typeof it.quantity === "number") quantity = it.quantity;
+        else if (it.quantity !== undefined && it.quantity !== null) {
+          const n = parseInt(String(it.quantity), 10);
+          quantity = Number.isNaN(n) ? 0 : n;
+        }
+        quantity = Math.max(0, Math.round(quantity));
+        return { name, quantity, category, location, status };
+      }
+
+      function setCategoryIfMatch(v) {
+        const s = (v || "").trim();
+        if (!s) return;
+        const opt = document.querySelector(`#categorySelect option[value="${CSS.escape(s)}"]`);
+        if (!opt) return;
+        window.__setCategory && window.__setCategory(s);
+      }
+
+      function setLocationIfMatch(v) {
+        const s = (v || "").trim();
+        if (!s) return;
+        const opt = document.querySelector(`#locationSelect option[value="${CSS.escape(s)}"]`);
+        if (!opt) return;
+        window.__setLocation && window.__setLocation(s);
+      }
+
+      function showPendingPanelIfAny() {
+        if (!pendingPanel) return;
+        const alive = pending.filter((x) => !x.added);
+        if (alive.length) pendingPanel.classList.remove("d-none");
+        else pendingPanel.classList.add("d-none");
+      }
+
+      function clearDraft(keepDefaults) {
+        nameInput.value = "";
+        qtyInput.value = "1";
+        if (noteInput) noteInput.value = "";
+        if (shelfInput) shelfInput.value = "";
+        if (!keepDefaults) {
+          setCategoryIfMatch("其他");
+          setLocationIfMatch("冰箱");
+        }
+        currentPendingId = null;
+        try { nameInput.focus(); } catch (e) {}
+      }
+
+      resetBtn && resetBtn.addEventListener("click", () => clearDraft(true));
+
+      function renderPending() {
+        if (!pendingPanel || !pendingListEl || !pendingCountEl) return;
+        const alive = pending.filter((x) => !x.added);
+        pendingCountEl.textContent = String(alive.length);
+        if (alive.length === 0) {
+          pendingPanel.classList.add("d-none");
+          pendingListEl.innerHTML = "";
+          return;
+        }
+        pendingPanel.classList.remove("d-none");
+        pendingListEl.innerHTML = "";
+
+        alive.forEach((it) => {
+          const row = document.createElement("div");
+          row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2";
+          if (it.id === currentPendingId) row.style.boxShadow = "0 0 0 4px rgba(46,125,90,0.20)";
+          row.setAttribute("data-id", String(it.id));
+          row.innerHTML = `
+            <input class="form-check-input" type="checkbox" data-role="pick" ${it.picked ? "checked" : ""} />
+            <button type="button" class="btn btn-link p-0 text-decoration-none flex-grow-1 text-start" data-role="load" style="min-width: 0;">
+              <div class="fw-semibold text-truncate">${it.name || "（未命名）"}</div>
+              <div class="text-muted small">${it.quantity} · ${it.category || "其他"} · ${it.location || "冰箱"}</div>
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-role="add">加入</button>
+          `;
+          pendingListEl.appendChild(row);
+        });
+      }
+
+      function loadPendingToDraft(id) {
+        const it = pending.find((x) => x.id === id);
+        if (!it) return;
+        currentPendingId = id;
+        nameInput.value = it.name || "";
+        qtyInput.value = String(it.quantity || 0);
+        setCategoryIfMatch(it.category);
+        setLocationIfMatch(it.location);
+        renderPending();
+        try { nameInput.focus(); } catch (e) {}
+      }
+
+      pendingListEl && pendingListEl.addEventListener("click", (e) => {
+        const pick = e.target.closest('[data-role="pick"]');
+        if (pick) {
+          const row = pick.closest("[data-id]");
+          const id = row ? Number(row.getAttribute("data-id")) : null;
+          const it = pending.find((x) => x.id === id);
+          if (it) it.picked = !!pick.checked;
+          return;
+        }
+        const loadBtn = e.target.closest('[data-role="load"]');
+        if (loadBtn) {
+          const row = loadBtn.closest("[data-id]");
+          const id = row ? Number(row.getAttribute("data-id")) : null;
+          if (id != null) loadPendingToDraft(id);
+          return;
+        }
+        const addBtn = e.target.closest('[data-role="add"]');
+        if (addBtn) {
+          const row = addBtn.closest("[data-id]");
+          const id = row ? Number(row.getAttribute("data-id")) : null;
+          if (id != null) {
+            loadPendingToDraft(id);
+            submitBtn.click();
+          }
+        }
+      });
+
+      function renderAdded() {
+        if (!addedListEl || !addedCountEl || !addedEmptyHint) return;
+        addedCountEl.textContent = String(added.length);
+        addedListEl.innerHTML = "";
+        addedEmptyHint.classList.toggle("d-none", added.length > 0);
+        added.forEach((it) => {
+          const row = document.createElement("div");
+          row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2";
+          row.setAttribute("data-item-id", String(it.item_id));
+          row.innerHTML = `
+            <div class="flex-grow-1" style="min-width:0;">
+              <div class="fw-semibold text-truncate">${it.name}</div>
+              <div class="text-muted small">${it.quantity}${it.unit ? " " + it.unit : ""} · ${it.category || "其他"} · ${it.location || "冰箱"}</div>
+            </div>
+            <button type="button" class="btn btn-outline-danger btn-sm" data-role="del"><i class="bi bi-trash"></i></button>
+          `;
+          addedListEl.appendChild(row);
+        });
+      }
+
+      addedListEl && addedListEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest('[data-role="del"]');
+        if (!btn) return;
+        const row = btn.closest("[data-item-id]");
+        const itemId = row ? Number(row.getAttribute("data-item-id")) : null;
+        if (!itemId) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/api/items/${itemId}/delete-json`, { method: "POST", headers: { "Accept": "application/json" } });
+          const data = await r.json();
+          if (!data || !data.ok) throw new Error();
+          added = added.filter((x) => x.item_id !== itemId);
+          renderAdded();
+          toast("已删除", "warning");
+        } catch (err) {
+          toast("删除失败，请稍后重试", "danger");
+          btn.disabled = false;
+        }
+      });
+
+      function getDraftPayload() {
+        const name = (nameInput.value || "").trim();
+        const qty = Math.max(0, parseInt(String(qtyInput.value || "0"), 10) || 0);
+        const category = (document.getElementById("categoryValue")?.value || "其他").trim() || "其他";
+        const location = (document.getElementById("locationValue")?.value || "冰箱").trim() || "冰箱";
+        const unit = (unitInput && unitInput.value) ? unitInput.value : "份";
+        const note = (noteInput && noteInput.value) ? noteInput.value : "";
+        return { name, quantity: qty, category, location, unit, note };
+      }
+
+      async function addCurrentDraft() {
+        const payload = getDraftPayload();
+        if (!payload.name) {
+          toast("名称不能为空", "danger");
+          try { nameInput.focus(); } catch (e) {}
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.querySelector(".btn-label")?.classList.add("d-none");
+        submitBtn.querySelector(".btn-loading")?.classList.remove("d-none");
+        try {
+          const r = await fetch("/api/items/add-one", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await r.json();
+          if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "加入失败");
+
+          // Move pending item -> added list (if current came from pending)
+          added.unshift({ item_id: data.item_id, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
+          renderAdded();
+
+          if (currentPendingId != null) {
+            const it = pending.find((x) => x.id === currentPendingId);
+            if (it) it.added = true;
+            currentPendingId = null;
+            renderPending();
+          } else {
+            clearDraft(true);
+          }
+          toast(`已加入：${payload.name}`, "success");
+        } catch (err) {
+          toast("加入库存失败，请稍后重试", "danger");
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.querySelector(".btn-label")?.classList.remove("d-none");
+          submitBtn.querySelector(".btn-loading")?.classList.add("d-none");
+        }
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        addCurrentDraft();
+      });
+
+      pendingAddSelectedBtn && pendingAddSelectedBtn.addEventListener("click", async () => {
+        const selected = pending.filter((x) => x.picked && !x.added);
+        if (!selected.length) return;
+        // sequential submit, stable
+        for (const it of selected) {
+          currentPendingId = it.id;
+          nameInput.value = it.name || "";
+          qtyInput.value = String(it.quantity || 0);
+          setCategoryIfMatch(it.category);
+          setLocationIfMatch(it.location);
+          // eslint-disable-next-line no-await-in-loop
+          await addCurrentDraft();
+        }
+      });
+
+      pendingClearBtn && pendingClearBtn.addEventListener("click", () => {
+        pending = [];
+        currentPendingId = null;
+        renderPending();
+      });
+
+      // AI recognize flow -> pending queue
+      if (aiBtn && aiInput) {
+        aiBtn.addEventListener("click", () => aiInput.click());
+        aiInput.addEventListener("change", async () => {
+          const file = aiInput.files && aiInput.files[0] ? aiInput.files[0] : null;
+          if (!file) return;
+          const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+          try { modal?.show(); } catch (e) {}
+          try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const r = await fetch("/api/ai/recognize-food", { method: "POST", body: fd });
+            const data = await r.json();
+            if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "识别失败");
+            const arr = Array.isArray(data.data) ? data.data : [];
+            const list = arr.map(normalizeItem).filter((x) => x.name);
+            if (list.length === 0) {
+              toast("未识别到物品，可手动添加", "warning");
+              return;
+            }
+            if (list.length === 1) {
+              const d = list[0];
+              nameInput.value = d.name || "";
+              qtyInput.value = String(d.quantity || 0);
+              setCategoryIfMatch(d.category);
+              setLocationIfMatch(d.location);
+              toast(`已成功识别：${d.name}`, "success");
+              return;
+            }
+            // Build pending queue
+            pending = list.map((x, i) => ({
+              id: Date.now() + i,
+              ...x,
+              picked: true,
+              added: false,
+            }));
+            currentPendingId = pending[0].id;
+            renderPending();
+            loadPendingToDraft(currentPendingId);
+            toast(`成功识别到 ${pending.length} 个物品`, "success");
+            showPendingPanelIfAny();
+          } catch (err) {
+            toast("AI 识别服务异常，请手动添加", "danger");
+          } finally {
+            try { modal?.hide(); } catch (e) {}
+            aiInput.value = "";
+          }
+        });
+      }
+
+      // AI text parse -> pending queue
+      if (aiTextParseBtn && aiTextInput) {
+        aiTextParseBtn.addEventListener("click", async () => {
+          const text = (aiTextInput.value || "").trim();
+          if (!text) {
+            toast("请输入要解析的文本", "warning");
+            return;
+          }
+          aiTextParseBtn.disabled = true;
+          try {
+            const r = await fetch("/api/ai/parse-text", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            const data = await r.json();
+            if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "解析失败");
+            const arr = Array.isArray(data.data) ? data.data : [];
+            const list = arr.map(normalizeItem).filter((x) => x.name);
+            if (!list.length) {
+              toast("未识别到物品，可手动添加", "warning");
+              return;
+            }
+            pending = list.map((x, i) => ({
+              id: Date.now() + i,
+              ...x,
+              picked: true,
+              added: false,
+            }));
+            currentPendingId = pending[0].id;
+            renderPending();
+            loadPendingToDraft(currentPendingId);
+            toast(`成功识别到 ${pending.length} 个物品`, "success");
+            showPendingPanelIfAny();
+          } catch (e) {
+            toast("AI 识别服务异常，请手动添加", "danger");
+          } finally {
+            aiTextParseBtn.disabled = false;
+          }
+        });
+      }
+
+      aiTextClearBtn && aiTextClearBtn.addEventListener("click", () => {
+        if (aiTextInput) aiTextInput.value = "";
+      });
+
+      // init
+      renderPending();
+      renderAdded();
+    })();
+  </script>
+  <script>
+    (function () {
+      const modalEl = document.getElementById("scanModal");
+      const statusEl = document.getElementById("scanStatus");
+      const nameInput = document.getElementById("nameInput");
+      const qtyInput = document.querySelector('[name="quantity"]');
+      const videoEl = document.getElementById("scanVideo");
+
+      if (!modalEl || !statusEl) return;
+
+      let stream = null;
+      let detector = null;
+      let html5Scanner = null;
+      let detectTimer = null;
+      let isRunning = false;
+      let isPaused = false;
+      let lastCode = "";
+      let lastAt = 0;
+      // 防止同一轮扫码期间重复触发接口（只允许一笔正在处理中的请求）。
+      let isHandlingHit = false;
+
+      async function scanAdd(barcode) {
+        const r = await fetch("/api/barcode/scan-add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) throw new Error(data.error || "扫码入库失败");
+        return data;
+      }
+
+      function setStatus(html, kind) {
+        statusEl.className = "small " + (kind || "text-muted");
+        statusEl.innerHTML = html;
+      }
+
+      function setStep(el, state) {
+        if (!el) return;
+        el.classList.remove("text-success", "text-danger", "fw-semibold");
+        if (state === "ok") el.classList.add("text-success", "fw-semibold");
+        if (state === "bad") el.classList.add("text-danger", "fw-semibold");
+      }
+
+      function withTimeout(promise, ms, label) {
+        let t = null;
+        const timeout = new Promise((_, reject) => {
+          t = window.setTimeout(() => reject(new Error(label || `超时（${ms}ms）`)), ms);
+        });
+        return Promise.race([promise, timeout]).finally(() => {
+          if (t) window.clearTimeout(t);
+        });
+      }
+
+      const startBtn = null;
+      const stopBtn = null;
+      const nextBtn = null;
+      const retryBtn = null;
+      const hitOverlay = document.getElementById("scanHitOverlay");
+      const hitName = document.getElementById("scanHitName");
+      const hitMeta = document.getElementById("scanHitMeta");
+      const hitIcon = document.getElementById("scanHitIcon");
+      const hitTitle = document.getElementById("scanHitTitle");
+      const hitNextBtn = document.getElementById("scanHitNextBtn");
+      const hitDoneBtn = document.getElementById("scanHitDoneBtn");
+      const hitManualAddBtn = document.getElementById("scanHitManualAddBtn");
+      const manualInput = document.getElementById("manualBarcodeInput");
+      const manualBtn = document.getElementById("manualBarcodeBtn");
+      const copyLocalBtn = document.getElementById("copyLocalUrlBtn");
+      const copyThisBtn = document.getElementById("copyThisUrlBtn");
+      const urlHint = document.getElementById("urlHint");
+      const stepPerm = document.getElementById("stepPerm");
+      const stepOpen = document.getElementById("stepOpen");
+      const stepScan = document.getElementById("stepScan");
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function computeLocalhostUrl() {
+        const port = window.location.port || "5000";
+        return `${window.location.protocol}//127.0.0.1:${port}${window.location.pathname}`;
+      }
+
+      async function stopScanner() {
+        isRunning = false;
+        if (detectTimer) {
+          window.clearInterval(detectTimer);
+          detectTimer = null;
+        }
+        if (html5Scanner) {
+          try { await html5Scanner.stop(); } catch (e) {}
+          try { await html5Scanner.clear(); } catch (e) {}
+          html5Scanner = null;
+        }
+        if (videoEl) {
+          try { videoEl.pause(); } catch (e) {}
+          videoEl.srcObject = null;
+        }
+        if (stream) {
+          try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+          stream = null;
+        }
+        detector = null;
+      }
+
+      function setButtons(_state) {
+        // 按钮栏已移除，这里保留空实现以兼容现有逻辑调用。
+      }
+
+      function pauseScanning() {
+        isPaused = true;
+        if (nextBtn) nextBtn.disabled = false;
+        if (hitOverlay) hitOverlay.classList.remove("d-none");
+      }
+
+      function resumeScanning() {
+        isPaused = false;
+        lastCode = "";
+        lastAt = 0;
+        isHandlingHit = false;
+        if (nextBtn) nextBtn.disabled = true;
+        if (hitOverlay) hitOverlay.classList.add("d-none");
+        setStatus("已恢复识别。请将下一个条码对准取景框。", "text-muted");
+      }
+
+      function playFeedback(kind) {
+        try {
+          if (navigator.vibrate) {
+            if (kind === "success") navigator.vibrate([40, 30, 40]);
+            else navigator.vibrate([80, 40, 80]);
+          }
+        } catch (e) {}
+
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          const ctx = new Ctx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = kind === "success" ? 1200 : 600;
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.2);
+        } catch (e) {}
+      }
+
+      async function showHit(addRes, code) {
+        // 成功后直接回到“新增项目”主表单界面，让用户编辑位置/分类等信息。
+        // 这里只做反馈和关闭扫码弹窗，不再显示遮罩上的按钮。
+        playFeedback("success");
+        await stopScanner();
+        isRunning = false;
+        isHandlingHit = false;
+        if (hitOverlay) hitOverlay.classList.add("d-none");
+        const m = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.hide();
+        if (nameInput) {
+          window.setTimeout(() => {
+            nameInput.focus();
+          }, 200);
+        }
+      }
+
+      async function startFlow() {
+        if (isRunning) return;
+        setButtons("running");
+        setStep(stepPerm, null);
+        setStep(stepOpen, null);
+        setStep(stepScan, null);
+        setStatus("阶段1：准备启动…（scan-ui v3）", "text-muted");
+
+        const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+        if (!window.isSecureContext && !isLocalhost) {
+          const localhostUrl = computeLocalhostUrl();
+          setStatus(
+            `⚠️ 当前页面不是安全上下文（${window.location.origin}）。多数浏览器只允许在 <b>HTTPS</b> 或 <b>localhost/127.0.0.1</b> 下使用摄像头。<br/><br/>` +
+            `- 本机扫码：请打开 <a href="${localhostUrl}">${localhostUrl}</a><br/>` +
+            `- 手机/其它电脑：请使用 HTTPS 地址（证书需信任）`,
+            "text-warning"
+          );
+          setButtons("failed");
+          return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("❌ 当前浏览器不支持摄像头 API。请使用 Chrome/Edge 最新版。", "text-danger");
+          setButtons("failed");
+          return;
+        }
+
+        const hasHtml5Qrcode = typeof window.Html5Qrcode !== "undefined";
+        const hasBarcodeDetector = "BarcodeDetector" in window;
+        if (!hasHtml5Qrcode && !hasBarcodeDetector) {
+          setStatus(
+            "❌ 当前浏览器缺少条码识别能力：html5-qrcode 未加载，且不支持 BarcodeDetector。请检查网络/CDN，或使用下方“手动输入条码”。",
+            "text-danger"
+          );
+          setButtons("failed");
+          return;
+        }
+
+        // Stage 2: request permission
+        try {
+          setStatus("阶段2：请求摄像头权限…（请在弹出的权限对话框中点击“允许”）", "text-muted");
+          const stream = await withTimeout(
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }),
+            5000,
+            "请求摄像头权限超时（5s）"
+          );
+          stream.getTracks().forEach((t) => t.stop());
+          setStep(stepPerm, "ok");
+        } catch (e) {
+          setStep(stepPerm, "bad");
+          const code = e && e.name ? e.name : "Error";
+          const msg = e && e.message ? e.message : String(e);
+          let hint = "请检查浏览器站点权限（地址栏摄像头图标），并关闭占用摄像头的软件（会议/相机）。";
+          if (code === "NotAllowedError") hint = "权限被拒绝：请在地址栏摄像头图标里改为“允许”，然后重试。";
+          if (code === "NotFoundError") hint = "未找到摄像头：请确认设备有摄像头且未被禁用。";
+          if (code === "NotReadableError") hint = "摄像头可能被占用：请关闭其它占用摄像头的软件后重试。";
+          setStatus(`❌ 阶段2失败（${code}）：${msg}<br/>${hint}`, "text-danger");
+          setButtons("failed");
+          return;
+        }
+
+        // Stage 3: open preview + scanning
+        try {
+          await stopScanner();
+          setStatus("阶段3：正在打开摄像头预览…", "text-muted");
+
+          if (hasHtml5Qrcode) {
+            // Use html5-qrcode when available (more widely supported).
+            html5Scanner = new window.Html5Qrcode("qr-reader");
+            await withTimeout(
+              html5Scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 260, height: 160 } },
+                async (decodedText) => {
+                  if (isPaused || isHandlingHit) return;
+                  const code = String(decodedText || "").trim();
+                  const now = Date.now();
+                  if (!code) return;
+                  if (code === lastCode && now - lastAt < 1500) return;
+                  lastCode = code;
+                  lastAt = now;
+                  // 进入“处理中”状态：立刻停止摄像头，只保留这一笔请求。
+                  isPaused = true;
+                  isHandlingHit = true;
+                  await stopScanner();
+                  if (hitOverlay) hitOverlay.classList.remove("d-none");
+                  // 视觉切换为“正在查询”
+                  if (hitIcon) {
+                    hitIcon.className = "text-primary fs-4";
+                    hitIcon.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                  }
+                  if (hitTitle) hitTitle.textContent = "正在查询商品信息";
+                  if (hitName) hitName.textContent = "正在查询商品信息…";
+                  if (hitMeta) {
+                    hitMeta.innerHTML = `条码：<span class="mono fw-semibold">${code}</span><br/><span class="text-muted">请稍候，正在从接口获取商品信息…</span>`;
+                  }
+                  setStep(stepOpen, "ok");
+                  setStep(stepScan, "ok");
+
+                  setStatus(`识别到条码：<span class="mono fw-semibold">${code}</span><br/>正在查询并入库…`, "text-muted");
+                  try {
+                    const addRes = await scanAdd(code);
+                    if (nameInput) nameInput.value = addRes.name || nameInput.value;
+                    if (qtyInput) qtyInput.value = addRes.quantity ?? qtyInput.value;
+                    setStatus(
+                      `✅ 已完成入库。请在右侧点击“继续扫描下一个”或“扫描结束”。`,
+                      "text-success"
+                    );
+                    await showHit(addRes, code);
+                  } catch (e) {
+                    isHandlingHit = false;
+                    // 查询失败：保持遮罩，改成错误态，允许用户选择继续扫码或手动录入。
+                    if (hitIcon) {
+                      hitIcon.className = "text-danger fs-4";
+                      hitIcon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
+                    }
+                    if (hitTitle) hitTitle.textContent = "查询失败";
+                    if (hitName) hitName.textContent = "未能获取商品信息";
+                    if (hitMeta) {
+                      const msg = (e && e.message) ? e.message : "扫码失败";
+                      hitMeta.innerHTML =
+                        `条码：<span class="mono fw-semibold">${code}</span><br/>` +
+                        `<span class="text-danger">错误：${msg}</span><br/>` +
+                        `<span class="text-muted">你可以点击“继续扫描下一个”重新尝试，或点击“手动录入条码”在下方表单中填写。</span>`;
+                    }
+                    if (manualInput) {
+                      manualInput.value = code;
+                    }
+                    if (hitDoneBtn) {
+                      hitDoneBtn.innerHTML = '<i class="bi bi-upc me-1"></i>手动录入条码';
+                    }
+                    setStatus(`❌ ${(e && e.message) ? e.message : "扫码失败"}<br/>请先到“设置”页配置条码接口 APP_ID/SECRET。`, "text-danger");
+                    playFeedback("error");
+                  }
+                }
+              ),
+              5000,
+              "打开摄像头预览超时（5s）"
+            );
+            isRunning = true;
+            isPaused = false;
+            setStatus("已启动。请将条码对准取景框。", "text-muted");
+            setButtons("running");
+          } else {
+            // Fallback: BarcodeDetector.
+            stream = await withTimeout(
+              navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }),
+              5000,
+              "打开摄像头预览超时（5s）"
+            );
+
+            if (videoEl) {
+              videoEl.srcObject = stream;
+              await videoEl.play();
+            }
+
+            detector = new window.BarcodeDetector({
+              formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "itf", "qr_code"],
+            });
+
+            isRunning = true;
+            isPaused = false;
+            setStep(stepOpen, "ok");
+            setStatus("已启动。请将条码对准取景框。", "text-muted");
+
+            detectTimer = window.setInterval(async () => {
+              if (isPaused || isHandlingHit) return;
+              if (!isRunning || !detector || !videoEl) return;
+              try {
+                const res = await detector.detect(videoEl);
+                if (!res || res.length === 0) return;
+                const code = String(res[0].rawValue || "").trim();
+                const now = Date.now();
+                if (!code) return;
+                if (code === lastCode && now - lastAt < 1500) return;
+                lastCode = code;
+                lastAt = now;
+                // 识别到后立刻停止摄像头并显示前端弹窗，避免继续多次识别。
+                isPaused = true;
+                isHandlingHit = true;
+                await stopScanner();
+                if (hitOverlay) hitOverlay.classList.remove("d-none");
+                // 视觉切换为“正在查询”
+                if (hitIcon) {
+                  hitIcon.className = "text-primary fs-4";
+                  hitIcon.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                }
+                if (hitTitle) hitTitle.textContent = "正在查询商品信息";
+                if (hitName) hitName.textContent = "正在查询商品信息…";
+                if (hitMeta) {
+                  hitMeta.innerHTML = `条码：<span class="mono fw-semibold">${code}</span><br/><span class="text-muted">请稍候，正在从接口获取商品信息…</span>`;
+                }
+                setStep(stepScan, "ok");
+
+                setStatus(`识别到条码：<span class="mono fw-semibold">${code}</span><br/>正在查询并入库…`, "text-muted");
+                try {
+                  const addRes = await scanAdd(code);
+                  if (nameInput) nameInput.value = addRes.name || nameInput.value;
+                  if (qtyInput) qtyInput.value = addRes.quantity ?? qtyInput.value;
+                  setStatus(
+                    `✅ 已完成入库。请在右侧点击“继续扫描下一个”或“扫描结束”。`,
+                    "text-success"
+                  );
+                  await showHit(addRes, code);
+                } catch (e) {
+                  isHandlingHit = false;
+                  // 查询失败：保持遮罩，改成错误态，允许用户选择继续扫码或手动录入。
+                  if (hitIcon) {
+                    hitIcon.className = "text-danger fs-4";
+                    hitIcon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
+                  }
+                  if (hitTitle) hitTitle.textContent = "查询失败";
+                  if (hitName) hitName.textContent = "未能获取商品信息";
+                  if (hitMeta) {
+                    const msg = (e && e.message) ? e.message : "扫码失败";
+                    hitMeta.innerHTML =
+                      `条码：<span class="mono fw-semibold">${code}</span><br/>` +
+                      `<span class="text-danger">错误：${msg}</span><br/>` +
+                      `<span class="text-muted">你可以点击“继续扫描下一个”重新尝试，或点击“手动录入条码”在下方表单中填写。</span>`;
+                  }
+                  if (manualInput) {
+                    manualInput.value = code;
+                  }
+                  if (hitDoneBtn) {
+                    hitDoneBtn.innerHTML = '<i class="bi bi-upc me-1"></i>手动录入条码';
+                  }
+                  setStatus(`❌ ${(e && e.message) ? e.message : "扫码失败"}<br/>请先到“设置”页配置条码接口 APP_ID/SECRET。`, "text-danger");
+                  playFeedback("error");
+                }
+              } catch (e) {}
+            }, 250);
+
+            setButtons("running");
+          }
+        } catch (e) {
+          setStep(stepOpen, "bad");
+          const msg = e && e.message ? e.message : String(e);
+          setStatus(`❌ 阶段3失败：${msg}<br/>可点击“重试”，或使用下方“手动输入条码”。`, "text-danger");
+          await stopScanner();
+          setButtons("failed");
+        }
+      }
+
+      async function manualAdd() {
+        const code = (manualInput && manualInput.value ? manualInput.value : "").trim();
+        if (!code) {
+          setStatus("请输入条码后再点击“手动添加商品”。", "text-warning");
+          return;
+        }
+        // 手动添加商品：不再调用外部条码接口，而是引导用户回到上方表单手动输入完整商品信息。
+        const m = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.hide();
+        if (nameInput) {
+          window.setTimeout(() => {
+            nameInput.focus();
+          }, 200);
+        }
+      }
+
+      // 顶部控制按钮已移除，不再绑定点击事件。
+      if (hitNextBtn) hitNextBtn.addEventListener("click", async () => { resumeScanning(); setButtons("running"); await startFlow(); });
+      if (hitDoneBtn) hitDoneBtn.addEventListener("click", async () => {
+        // 如果当前是“手动录入条码”按钮，则只关闭遮罩并聚焦到手动输入框，不关闭整个弹窗。
+        const isManualButton = hitDoneBtn.textContent && hitDoneBtn.textContent.indexOf("手动录入条码") !== -1;
+        await stopScanner();
+        setButtons("idle");
+        if (hitOverlay) hitOverlay.classList.add("d-none");
+        if (isManualButton) {
+          if (manualInput) {
+            manualInput.focus();
+            if (typeof manualInput.select === "function") {
+              manualInput.select();
+            }
+          }
+        } else {
+          const m = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+          m.hide();
+        }
+      });
+      if (hitManualAddBtn) hitManualAddBtn.addEventListener("click", async () => {
+        // 手动添加商品信息：关闭扫码弹窗，返回主表单填写。
+        await stopScanner();
+        setButtons("idle");
+        const m = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.hide();
+        if (nameInput) {
+          window.setTimeout(() => {
+            nameInput.focus();
+          }, 200);
+        }
+      });
+      if (manualBtn) manualBtn.addEventListener("click", () => manualAdd());
+      if (manualInput) manualInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); manualAdd(); } });
+
+      if (copyLocalBtn) copyLocalBtn.addEventListener("click", async () => {
+        const txt = computeLocalhostUrl();
+        const ok = await copyText(txt);
+        setStatus(ok ? `已复制：${txt}` : `复制失败，请手动复制：${txt}`, ok ? "text-success" : "text-warning");
+      });
+      if (copyThisBtn) copyThisBtn.addEventListener("click", async () => {
+        const txt = window.location.href;
+        const ok = await copyText(txt);
+        setStatus(ok ? `已复制：${txt}` : `复制失败，请手动复制：${txt}`, ok ? "text-success" : "text-warning");
+      });
+
+      modalEl.addEventListener("shown.bs.modal", async () => {
+        setButtons("idle");
+        setStatus("准备就绪。正在自动启动摄像头…", "text-muted");
+        lastCode = "";
+        lastAt = 0;
+        isPaused = false;
+        isRunning = false;
+        if (hitOverlay) hitOverlay.classList.add("d-none");
+
+        const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+        if (urlHint) {
+          if (!window.isSecureContext && !isLocalhost) {
+            urlHint.innerHTML =
+              `当前为 <b>HTTP/非安全上下文</b>：摄像头可能无法使用。<br/>` +
+              `本机可用 <code>${computeLocalhostUrl()}</code>；手机/其它电脑建议使用 HTTPS。`;
+          } else {
+            urlHint.innerHTML = `当前为 <b>安全上下文</b>（${window.location.origin}）。可点击“启动摄像头”开始扫码。`;
+          }
+        }
+
+        // Auto-start camera on modal open (no second click).
+        // Small delay to ensure modal layout is ready.
+        window.setTimeout(() => { startFlow(); }, 150);
+      });
+
+      modalEl.addEventListener("hidden.bs.modal", async () => {
+        await stopScanner();
+        isPaused = false;
+        setButtons("idle");
+        if (hitOverlay) hitOverlay.classList.add("d-none");
+      });
+    })();
+  </script>
+{% endblock %}

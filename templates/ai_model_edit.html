@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑模型' if model else '新增模型' }}{% endblock %}
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
+    <div>
+      <h4 class="mb-1">{{ '编辑模型' if model else '新增模型' }}</h4>
+      <div class="text-muted small">请求模板/返回解析规则可配，用于“连通性测试”。</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('ai_models.ai_models_list') }}">返回列表</a>
+  </div>
+
+  {% if model %}
+    <form method="post" action="{{ url_for('ai_models.ai_models_edit', model_id=model.id) }}">
+  {% else %}
+    <form method="post" action="{{ url_for('ai_models.ai_models_create') }}">
+  {% endif %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label">模型名称</label>
+            <input class="form-control" name="name" value="{{ model.name if model else '' }}" required />
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">引擎显示名（推荐）</label>
+            <input class="form-control" name="display_name" value="{{ model.display_name if model else '' }}" placeholder="例如：豆包-Code / 豆包-Pro / GLM-4-7" />
+            <div class="form-text">用于“能力选择引擎”与列表展示；留空则显示模型名称。</div>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">启用状态</label>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" name="enabled" {% if model is none or model.enabled %}checked{% endif %}>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">API 类型</label>
+            <select class="form-select" name="api_type">
+              {% for t in api_type_options %}
+                <option value="{{ t }}" {% if model and model.api_type == t %}selected{% endif %}>
+                  {{ t }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">超时（秒）</label>
+            <input class="form-control mono" name="timeout_s" value="{{ model.timeout_s if model else 60 }}" />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Base URL</label>
+            <input class="form-control mono" name="base_url" value="{{ model.base_url if model else 'https://ark.cn-beijing.volces.com' }}" required />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">模型标识</label>
+            <input class="form-control mono" name="model_name" value="{{ model.model_name if model else '' }}" required />
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">返回解析模式</label>
+            <select class="form-select" name="response_parse_mode">
+              <option value="auto_json" {% if model and model.response_parse_mode == 'auto_json' %}selected{% endif %}>auto_json（尝试提取 JSON）</option>
+              <option value="raw" {% if model and model.response_parse_mode == 'raw' %}selected{% endif %}>raw（只展示原始响应）</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">连通性成功判定（包含字段，可选）</label>
+            <input class="form-control" name="response_success_contains" value="{{ model.response_success_contains if model else '' }}" placeholder="例如：测试成功" />
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">额外请求头（JSON 对象，可选）</label>
+            <textarea class="form-control mono" name="headers_extra_json" rows="4">{{ model.headers_extra_json if model else '{}' }}</textarea>
+            <div class="form-text">系统会自动加 `Authorization: Bearer VOLCENGINE_API_KEY` 和 `Content-Type: application/json`，这里只填额外字段。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="mb-2">请求模板（request_template，JSON）</h5>
+        <div class="text-muted small mb-2">
+          支持占位符：<code>{{ '{{model}}' }}</code>、<code>{{ '{{prompt}}' }}</code>、<code>{{ '{{user_text}}' }}</code>、<code>{{ '{{image_data_url}}' }}</code>
+        </div>
+        <textarea class="form-control mono" name="request_template" rows="16" required>
+{% if model and model.request_template %}
+{{ model.request_template }}
+{% else %}
+{
+  "model": "{{model}}",
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "input_image", "image_url": "{{image_data_url}}" },
+        { "type": "input_text", "text": "{{prompt}}" }
+      ]
+    }
+  ]
+}
+{% endif %}
+        </textarea>
+        <div class="form-text">提示词内容在“连通性测试”里选择模板填充到 {{ '{{prompt}}' }}。</div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary" type="submit">保存</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('ai_models.ai_models_list') }}">取消</a>
+    </div>
+  </form>
+{% endblock %}
+

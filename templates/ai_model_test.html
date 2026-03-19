@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}模型连通性测试{% endblock %}
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
+    <div>
+      <h4 class="mb-1">模型连通性测试</h4>
+      <div class="text-muted small">模型：<span class="fw-semibold">{{ model.name }}</span></div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('ai_models.ai_models_list') }}">返回列表</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('ai_models.ai_models_edit', model_id=model.id) }}">配置</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-5">
+            <label class="form-label mb-0">选择提示词模板</label>
+            <select class="form-select mt-2" name="prompt_template_id">
+              {% for p in prompt_templates %}
+                <option value="{{ p.id }}" {% if selected_prompt_template_id and p.id == selected_prompt_template_id %}selected{% endif %}>
+                  [{{ p.category_code }}] {{ p.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">用于 {{ '{{prompt}}' }} 占位符。</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label mb-0">用户文本（可选）</label>
+            <input class="form-control mono mt-2" name="user_text" value="{{ request.form.get('user_text','') }}" placeholder="例如：番茄2个，放冰箱" />
+            <div class="form-text">用于 {{ '{{user_text}}' }} 占位符。</div>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label mb-0">上传图片（可选）</label>
+            <input class="form-control mt-2" type="file" name="image" accept="image/*" />
+            <div class="form-text">用于 {{ '{{image_data_url}}' }} 占位符。</div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <button class="btn btn-primary" type="submit">发送测试请求</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if result %}
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+          <div class="d-flex align-items-center gap-2">
+            {% if result.ok %}
+              <span class="badge text-bg-success">✅ 通畅</span>
+            {% else %}
+              <span class="badge text-bg-danger">❌ 不通</span>
+            {% endif %}
+            <span class="text-muted small">HTTP {{ result.status_code if result.status_code else '-' }}，耗时 {{ result.duration_ms if result.duration_ms else '-' }} ms</span>
+          </div>
+          <div class="text-muted small mono">Endpoint：{{ result.endpoint if result.endpoint else '-' }}</div>
+        </div>
+
+        <div class="mb-3">
+          {% if result.error %}
+            <div class="alert alert-danger">{{ result.error }}</div>
+          {% endif %}
+        </div>
+
+        <details class="mb-3">
+          <summary class="text-muted small">展开：请求体（payload）</summary>
+          <pre class="mono mb-0" style="white-space: pre-wrap;">{{ result.request_payload_pretty or (result.request_payload | tojson(indent=2)) }}</pre>
+        </details>
+
+        <details class="mb-3">
+          <summary class="text-muted small">展开：原始响应（JSON）</summary>
+          <pre class="mono mb-0" style="white-space: pre-wrap;">{{ result.response_json_pretty or (result.response_json | tojson(indent=2)) }}</pre>
+        </details>
+
+        {% if result.stream_text %}
+          <details class="mb-3">
+            <summary class="text-muted small">展开：流式输出（stream_text）</summary>
+            <pre class="mono mb-0" style="white-space: pre-wrap;">{{ result.stream_text }}</pre>
+          </details>
+        {% endif %}
+
+        {% if result.parsed is not none %}
+          <details>
+            <summary class="text-muted small">展开：解析结果（parsed）</summary>
+            <pre class="mono mb-0" style="white-space: pre-wrap;">{{ result.parsed_pretty or (result.parsed | tojson(indent=2)) }}</pre>
+          </details>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
