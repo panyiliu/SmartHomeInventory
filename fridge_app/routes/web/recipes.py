@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, render_template
 
 
-bp = Blueprint("recipes_web", __name__)
+bp = Blueprint("recipes", __name__)
 
 
 @bp.get("/recipes")

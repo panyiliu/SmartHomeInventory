@@ -16,7 +16,7 @@ from .routes.auth import bp as auth_bp
 from .routes.api.items import bp as items_api_bp
 from .routes.main import bp as main_bp
 from .routes.web.items_actions import bp as items_web_bp
-from .routes.web.recipes import bp as recipes_web_bp
+from .routes.web.recipes import bp as recipes_bp
 from .routes.api.recipes import bp as recipes_api_bp
 from .routes.web.ai_models import bp as ai_models_bp
 from .routes.web.ai_prompts import bp as ai_prompts_bp
@@ -553,7 +553,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_api_bp)
-    app.register_blueprint(recipes_web_bp)
+    app.register_blueprint(recipes_bp)
     app.register_blueprint(recipes_api_bp)
     app.register_blueprint(ai_models_bp)
     app.register_blueprint(ai_prompts_bp)
