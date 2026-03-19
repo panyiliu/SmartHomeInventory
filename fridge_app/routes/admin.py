@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
 
 from ..extensions import db
 from ..models import EmailLog, Item
@@ -255,6 +255,153 @@ def settings_save_ai_engines():
     set_setting("ai_engine_recipes_model_id", (request.form.get("ai_engine_recipes_model_id") or "").strip())
     flash("能力引擎选择已保存。", "success")
     return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
+
+
+# Items backup/export (JSON)
+@bp.get("/items/export")
+@admin_required
+def items_export():
+    """导出所有库存 Item 为 JSON 备份文件（包含软删除/用完记录）。"""
+    items = Item.query.order_by(Item.created_at.asc(), Item.id.asc()).all()
+
+    def _item_to_dict(it: Item) -> dict[str, Any]:
+        return {
+            "name": (it.name or "").strip(),
+            "category": (it.category or "").strip(),
+            "quantity": float(it.quantity or 0.0),
+            "unit": (it.unit or "").strip(),
+            "location": (it.location or "").strip(),
+            "note": (it.note or "").strip(),
+            "barcode": (it.barcode or "").strip() if it.barcode else "",
+            "shelf_life_days": it.shelf_life_days,
+            "used_up": bool(it.used_up),
+            "created_at": it.created_at.isoformat() if it.created_at else None,
+            "updated_at": it.updated_at.isoformat() if it.updated_at else None,
+            "deleted_at": it.deleted_at.isoformat() if it.deleted_at else None,
+        }
+
+    payload = {
+        "version": 1,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "items": [_item_to_dict(it) for it in items],
+    }
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    filename = f"items-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+
+    resp = current_app.response_class(text, mimetype="application/json; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@bp.post("/items/import")
+@admin_required
+def items_import():
+    """
+    从 JSON 备份导入库存 Item。
+    仅做“追加导入”：不会删除或覆盖现有记录，适合灾备恢复或跨实例迁移。
+    """
+    f = request.files.get("items_file")
+    if not f or not f.filename:
+        flash("请选择要导入的 JSON 备份文件。", "danger")
+        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+    try:
+        raw = f.read().decode("utf-8")
+    except Exception:
+        try:
+            raw = f.read().decode("utf-8", errors="ignore")
+        except Exception:
+            flash("导入失败：无法读取文件内容。", "danger")
+            return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+    try:
+        data = json.loads(raw)
+    except Exception:
+        flash("导入失败：JSON 解析错误。", "danger")
+        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+    # 兼容两种结构：纯列表 或 包含 items 字段的对象
+    if isinstance(data, dict):
+        items_data = data.get("items")
+    else:
+        items_data = data
+
+    if not isinstance(items_data, list):
+        flash("导入失败：JSON 结构不正确，应为 items 列表。", "danger")
+        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+    imported = 0
+    now = datetime.utcnow()
+
+    for obj in items_data:
+        if not isinstance(obj, dict):
+            continue
+        name = str(obj.get("name") or "").strip()
+        if not name:
+            continue
+
+        category = str(obj.get("category") or "其他").strip() or "其他"
+        unit = str(obj.get("unit") or "份").strip() or "份"
+        location = str(obj.get("location") or "冰箱").strip() or "冰箱"
+        note = str(obj.get("note") or "").strip()
+        barcode = str(obj.get("barcode") or "").strip() or None
+
+        try:
+            quantity = float(obj.get("quantity") or 0.0)
+        except Exception:
+            quantity = 0.0
+        if quantity < 0:
+            quantity = 0.0
+
+        shelf_life_days = obj.get("shelf_life_days")
+        try:
+            shelf_life_days_int = int(shelf_life_days) if shelf_life_days not in (None, "", "null") else None
+        except Exception:
+            shelf_life_days_int = None
+
+        used_up = bool(obj.get("used_up", False))
+
+        def _parse_dt(v: Any) -> datetime | None:
+            if not v:
+                return None
+            try:
+                s = str(v).strip()
+                # best-effort: drop timezone info to keep SQLite happy
+                if s.endswith("Z"):
+                    s = s[:-1]
+                # strip microseconds if present with 'Z' style
+                return datetime.fromisoformat(s)
+            except Exception:
+                return None
+
+        created_at = _parse_dt(obj.get("created_at")) or now
+        updated_at = _parse_dt(obj.get("updated_at")) or created_at
+        deleted_at = _parse_dt(obj.get("deleted_at"))
+
+        it = Item(
+            name=name,
+            category=category,
+            quantity=quantity,
+            unit=unit,
+            location=location,
+            note=note,
+            barcode=barcode,
+            shelf_life_days=shelf_life_days_int,
+            used_up=used_up,
+            deleted_at=deleted_at,
+        )
+        it.created_at = created_at
+        it.updated_at = updated_at
+        db.session.add(it)
+        imported += 1
+
+    if imported > 0:
+        db.session.commit()
+        flash(f"已导入 {imported} 条库存记录（追加导入，未删除现有数据）。", "success")
+    else:
+        flash("导入完成：未发现有效的库存记录。", "warning")
+
+    return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
 
 
 # Backward-compatible endpoint (kept, but UI no longer posts here)

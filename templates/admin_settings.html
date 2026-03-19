@@ -463,6 +463,31 @@
                   <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">返回首页</a>
                 </div>
               </form>
+
+              <hr class="my-4"/>
+
+              <div class="mt-2">
+                <h6 class="mb-2">📦 库存数据备份（仅 Item）</h6>
+                <div class="text-muted small mb-2">
+                  导出当前所有库存记录（包含“用完/回收站”项）为一个 JSON 文件，方便在本机/其他服务器做备份或迁移。
+                  导入时为<b>追加导入</b>，不会删除或覆盖现有数据。
+                </div>
+                <div class="d-flex flex-column flex-md-row gap-3 align-items-start">
+                  <div>
+                    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.items_export') }}">
+                      <i class="bi bi-download me-1"></i>导出库存 JSON 备份
+                    </a>
+                  </div>
+                  <form method="post" action="{{ url_for('admin.items_import') }}" enctype="multipart/form-data" class="d-flex flex-column flex-md-row gap-2 align-items-start">
+                    <div>
+                      <input class="form-control form-control-sm" type="file" name="items_file" accept="application/json,.json" />
+                    </div>
+                    <button class="btn btn-primary btn-sm" type="submit">
+                      <i class="bi bi-upload me-1"></i>导入 JSON 备份（追加）
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
 
