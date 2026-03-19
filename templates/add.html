@@ -50,6 +50,7 @@
               </button>
               <button id="aiTextClearBtn" type="button" class="btn btn-outline-secondary">清空</button>
             </div>
+            <div id="aiTextLog" class="text-muted small mt-2" style="min-height: 1.2em;"></div>
           </div>
 
           <div id="aiPendingPanelText" class="mb-3 d-none">
@@ -82,6 +83,7 @@
                 </button>
               </div>
             </div>
+            <div id="aiPhotoLog" class="text-muted small mt-2" style="min-height: 1.2em;"></div>
           </div>
 
           <div id="aiPendingPanelPhoto" class="mb-3 d-none">
@@ -341,6 +343,19 @@
     (function () {
       const rootCard = document.querySelector('[data-ai-text-enabled]');
       const AI_TEXT_ENABLED = rootCard ? rootCard.getAttribute("data-ai-text-enabled") === "1" : false;
+      const aiTextLogEl = document.getElementById("aiTextLog");
+      const aiPhotoLogEl = document.getElementById("aiPhotoLog");
+
+      function logAi(el, msg) {
+        if (!el || !msg) return;
+        const line = document.createElement("div");
+        line.textContent = msg;
+        el.appendChild(line);
+        // 只保留最近 6 条，避免无限增长
+        while (el.childNodes.length > 6) {
+          el.removeChild(el.firstChild);
+        }
+      }
       // Shared toast helper
       function toast(msg, kind) {
         const el = document.createElement("div");
@@ -721,6 +736,7 @@
         }
         if (!AI_TEXT_ENABLED) {
           toast("AI 未配置：请先在“设置 → 安全设置”中配置 VOLCENGINE_API_KEY 并启用 AI。", "danger");
+          logAi(aiTextLogEl, "⚠️ 当前未配置 AI，无法解析文本。");
           return;
         }
         if (aiTextAbort) {
@@ -732,6 +748,7 @@
         const timeoutId = controller ? window.setTimeout(() => {
           try { controller.abort(); } catch (e) {}
         }, 25000) : null;
+        logAi(aiTextLogEl, "🧠 正在整理这段话里提到的所有食材…");
         const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
         // 临时调整提示文案为“解析文本”
         if (aiModalEl) {
@@ -743,6 +760,7 @@
         try { modal?.show(); } catch (e) {}
         aiTextParseBtn.disabled = true;
         try {
+          logAi(aiTextLogEl, "📨 已发出请求，等待 AI 解析结果…");
           const r = await fetch("/api/ai/parse-text", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -750,20 +768,25 @@
             signal: controller ? controller.signal : undefined,
           });
           const data = await r.json().catch(() => ({}));
+          logAi(aiTextLogEl, `✅ 收到服务器响应（HTTP ${r.status}）`);
           if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "解析失败");
           const arr = Array.isArray(data.data) ? data.data : [];
           const list = arr.map(normalizeAiItem).filter((x) => x.name);
           if (!list.length) {
             toast("未识别到物品，可手动新增", "warning");
+            logAi(aiTextLogEl, "🤔 这次没有识别到任何物品，可以试试换种描述方式或直接手动新增。");
             return;
           }
           aiTextPanel && aiTextPanel.setPending(list);
           toast(`成功识别到 ${list.length} 项`, "success");
+          logAi(aiTextLogEl, `✨ 成功识别到 ${list.length} 项，已填入下方待确认列表。`);
         } catch (e) {
           if (e && e.name === "AbortError") {
             toast("AI 文本解析请求超时或已取消，请稍后重试。", "warning");
+            logAi(aiTextLogEl, "⏱️ 文本解析请求超时或已取消，请稍后再试。");
           } else {
             toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+            logAi(aiTextLogEl, `❌ 解析失败：${(e && e.message) ? e.message : "AI 服务异常"}`);
           }
         } finally {
           if (timeoutId) window.clearTimeout(timeoutId);
@@ -788,21 +811,26 @@
           const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
           try { modal?.show(); } catch (e) {}
           try {
+            logAi(aiPhotoLogEl, "📷 已选择图片，准备发送到 AI 识别…");
             const fd = new FormData();
             fd.append("image", file);
             const r = await fetch("/api/ai/recognize-food", { method: "POST", body: fd });
             const data = await r.json().catch(() => ({}));
+            logAi(aiPhotoLogEl, `✅ 收到服务器响应（HTTP ${r.status}）`);
             if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "识别失败");
             const arr = Array.isArray(data.data) ? data.data : [];
             const list = arr.map(normalizeAiItem).filter((x) => x.name);
             if (!list.length) {
               toast("未识别到物品，可手动新增", "warning");
+              logAi(aiPhotoLogEl, "🤔 这次图片里没有识别出明确的物品，可以试试换一张或者手动新增。");
               return;
             }
             aiPhotoPanel && aiPhotoPanel.setPending(list);
             toast(`成功识别到 ${list.length} 项`, "success");
+            logAi(aiPhotoLogEl, `✨ 成功识别到 ${list.length} 项，已填入下方待确认列表。`);
           } catch (e) {
             toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
+            logAi(aiPhotoLogEl, `❌ 识别失败：${(e && e.message) ? e.message : "AI 服务异常"}`);
           } finally {
             try { modal?.hide(); } catch (e) {}
             aiInput.value = "";
