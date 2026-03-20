@@ -5,6 +5,7 @@ import json
 import os
 import time
 from typing import Any
+import re
 
 import requests
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -18,6 +19,47 @@ from ...utils.auth import admin_required
 
 
 bp = Blueprint("ai_models", __name__, url_prefix="/admin")
+
+
+_PROTECTED_TEMPLATE_VARS = {
+    "{{model}}",
+    "{{prompt}}",
+    "{{user_text}}",
+    "{{image_data_url}}",
+}
+
+
+def _normalize_and_validate_request_template(raw: str) -> str:
+    """
+    Lock protected template variables so users can't change them.
+    - We normalize whitespace variants like `{{ prompt }}` -> `{{prompt}}`
+    - After normalization, any other `{{...}}` placeholder is rejected.
+    """
+    s = str(raw or "")
+    if not s.strip():
+        return s
+
+    # Normalize whitespace variants.
+    s = re.sub(r"{{\s*model\s*}}", "{{model}}", s, flags=re.IGNORECASE)
+    s = re.sub(r"{{\s*prompt\s*}}", "{{prompt}}", s, flags=re.IGNORECASE)
+    s = re.sub(r"{{\s*user_text\s*}}", "{{user_text}}", s, flags=re.IGNORECASE)
+    s = re.sub(r"{{\s*image_data_url\s*}}", "{{image_data_url}}", s, flags=re.IGNORECASE)
+
+    # Validate: no other placeholders allowed.
+    placeholders = re.findall(r"{{\s*([^}]+?)\s*}}", s)
+    allowed_inside = {"model", "prompt", "user_text", "image_data_url"}
+    for inside in placeholders:
+        key = str(inside).strip()
+        if key not in allowed_inside:
+            raise ValueError(f"请求模板包含不受支持/可变的占位符：{{{{{key}}}}}（仅允许 {{model}} / {{prompt}} / {{user_text}} / {{image_data_url}}）")
+
+    # Also require core placeholders for runtime.
+    if "{{model}}" not in s:
+        raise ValueError("请求模板必须包含 `{{model}}`。")
+    if "{{prompt}}" not in s:
+        raise ValueError("请求模板必须包含 `{{prompt}}`。")
+
+    return s
 
 
 def _parse_json_maybe(raw: str) -> Any:
@@ -200,6 +242,12 @@ def ai_models_edit(model_id: int):
         return redirect(url_for("ai_models.ai_models_edit", model_id=model_id))
 
     try:
+        request_template = _normalize_and_validate_request_template(request_template)
+    except Exception as e:
+        flash(str(e), "danger")
+        return redirect(url_for("ai_models.ai_models_edit", model_id=model_id))
+
+    try:
         json.loads(request_template)
     except Exception as e:
         flash(f"请求模板 JSON 解析失败：{e}", "danger")
@@ -271,6 +319,11 @@ def ai_models_create():
     request_template = request_template_raw.strip()
     if not request_template:
         flash("请求模板不能为空。", "danger")
+        return redirect(url_for("ai_models.ai_models_new"))
+    try:
+        request_template = _normalize_and_validate_request_template(request_template)
+    except Exception as e:
+        flash(str(e), "danger")
         return redirect(url_for("ai_models.ai_models_new"))
     try:
         json.loads(request_template)

@@ -86,6 +86,9 @@
         <div class="text-muted small mb-2">
           支持占位符：<code>{{ '{{model}}' }}</code>、<code>{{ '{{prompt}}' }}</code>、<code>{{ '{{user_text}}' }}</code>、<code>{{ '{{image_data_url}}' }}</code>
         </div>
+        <div class="form-text mb-2">
+          以上变量占位符会被“锁定/自动规范化”，不允许用户手动改名；除此之外的内容可自由修改。
+        </div>
         <textarea class="form-control mono" name="request_template" rows="16" required>
 {% if model and model.request_template %}
 {{ model.request_template }}
