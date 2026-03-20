@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import os
+import time
 
 from flask import Flask
 
@@ -47,6 +49,15 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = cfg.secret_key
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.database_uri
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Session cookie security (兼容 http：默认不强制 Secure；可通过环境变量强制开启）
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+    app.config["SESSION_COOKIE_SECURE"] = (os.environ.get("SESSION_COOKIE_SECURE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     db.init_app(app)
 
@@ -71,6 +82,12 @@ def create_app() -> Flask:
         if db.session.get(Setting, "barcode_app_secret") is None:
             db.session.add(Setting(key="barcode_app_secret", value="", updated_at=datetime.utcnow()))
 
+        # Seed B2 backup scheduler defaults
+        if db.session.get(Setting, "backup_enabled") is None:
+            db.session.add(Setting(key="backup_enabled", value="0", updated_at=datetime.utcnow()))
+        if db.session.get(Setting, "backup_frequency_cron") is None:
+            db.session.add(Setting(key="backup_frequency_cron", value="0 3 * * *", updated_at=datetime.utcnow()))
+
         # Seed default "数据与选项" on fresh DBs (or when user left them empty as {}).
         ensure_setting_if_empty("category_options", dump_option_list(["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "日用品", "其他"]))
         ensure_setting_if_empty("location_options", dump_option_list(["冰箱", "橱柜", "厨房", "室外", "卫生间", "大卧室", "小卧室"]))
@@ -79,6 +96,24 @@ def create_app() -> Flask:
         ensure_setting_if_empty("category_label_map_json", dump_json_object(DEFAULT_CATEGORY_SHORT_LABEL_MAP))
         ensure_setting_if_empty("location_label_map_json", dump_json_object(DEFAULT_LOCATION_SHORT_LABEL_MAP))
         db.session.commit()
+
+        # Owner兜底：如果没有 owner，尝试把最早的 admin 提升为 owner；
+        # 并且强制 owner 一定启用（Owner 不可禁用）。
+        from .models import User as _User
+        owner_cnt = _User.query.filter_by(role="owner").count()
+        if owner_cnt == 0:
+            first_admin = _User.query.filter_by(role="admin").order_by(_User.created_at.asc()).first()
+            if first_admin:
+                first_admin.role = "owner"
+                first_admin.active = True
+                db.session.commit()
+        else:
+            # if any owner is disabled due to legacy data, re-enable it.
+            disabled_owners = _User.query.filter(_User.role == "owner", _User.active.is_(False)).all()
+            if disabled_owners:
+                for ow in disabled_owners:
+                    ow.active = True
+                db.session.commit()
 
         # One-time migration: rename ark_api_key -> volcengine_api_key (strict naming).
         if db.session.get(Setting, "volcengine_api_key") is None:
@@ -497,20 +532,52 @@ def create_app() -> Flask:
         # Load current user into g.
         g.current_user = load_current_user()
 
+        endpoint = (request.endpoint or "") if request else ""
+        is_static = endpoint == "static"
+        is_auth_ep = bool(endpoint) and endpoint.startswith("auth.")
+
         # First-run setup: require creating admin.
-        if User.query.count() == 0:
-            if request.endpoint and request.endpoint.startswith("auth."):
-                return None
-            # allow static
-            if request.endpoint == "static":
-                return None
-            return redirect(url_for("auth.setup_get", next=request.full_path if request.full_path else request.path))
+        user_cnt = User.query.count()
+        if user_cnt == 0:
+            # allow setup/login endpoints before any admin exists,
+            # but still enforce CSRF for state-changing requests.
+            if not is_auth_ep:
+                if is_static:
+                    return None
+                return redirect(url_for("auth.setup_get", next=request.full_path if request.full_path else request.path))
+
+        # Session idle timeout (30 minutes).
+        if user_cnt > 0 and g.current_user is not None:
+            idle_s = int(os.environ.get("SESSION_IDLE_TIMEOUT_S") or "1800")
+            last = session.get("last_activity_at")
+            now = time.time()
+            try:
+                if last is not None and (now - float(last)) > idle_s:
+                    session.clear()
+                    g.current_user = None
+                    return redirect(url_for("auth.login", next=request.full_path if request.full_path else request.path))
+            except Exception:
+                # If parsing fails, be conservative and reset session.
+                session.clear()
+                g.current_user = None
+                return redirect(url_for("auth.login", next=request.full_path if request.full_path else request.path))
+
+            session["last_activity_at"] = now
 
         # Require login for everything except auth endpoints and static.
-        if request.endpoint in {"static"} or (request.endpoint and request.endpoint.startswith("auth.")):
-            return None
-        if g.current_user is None:
+        if not is_static and not is_auth_ep and g.current_user is None:
             return redirect(url_for("auth.login", next=request.full_path if request.full_path else request.path))
+
+        # Must-change-password (选项A：拦截所有非改密/登出页面)
+        if g.current_user is not None and getattr(g.current_user, "must_change_password", False):
+            allowed_endpoints = {
+                "auth.change_password_get",
+                "auth.change_password_post",
+                "auth.logout",
+                "static",
+            }
+            if endpoint not in allowed_endpoints:
+                return redirect(url_for("auth.change_password_get"))
 
         # CSRF validation for state-changing methods.
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -560,6 +627,14 @@ def create_app() -> Flask:
     app.register_blueprint(ai_models_bp)
     app.register_blueprint(ai_prompts_bp)
     app.register_blueprint(users_bp)
+
+    # Background tasks: B2 automatic backup scheduler
+    try:
+        from .services.backup_scheduler import start_backup_scheduler
+
+        start_backup_scheduler(app)
+    except Exception as e:
+        print(f"[BackupScheduler] failed to start: {e}")
 
     return app
 

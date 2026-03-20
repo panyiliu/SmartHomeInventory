@@ -15,7 +15,11 @@ class User(db.Model):
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_login_at = db.Column(db.DateTime, nullable=True)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
 
     def is_admin(self) -> bool:
-        return (self.role or "").lower() == "admin"
+        return (self.role or "").lower() in {"admin", "owner"}
+
+    def is_owner(self) -> bool:
+        return (self.role or "").lower() == "owner"
 

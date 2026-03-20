@@ -27,13 +27,17 @@
                 <label class="form-label">角色</label>
                 <select class="form-select" name="role">
                   <option value="member" selected>成员</option>
+                  <option value="readonly">只读</option>
                   <option value="admin">管理员</option>
+                  {% if current_user and current_user.is_owner() %}
+                    <option value="owner">Owner（超级管理员）</option>
+                  {% endif %}
                 </select>
-                <div class="form-text">管理员可进入设置、AI 模型、提示词等页面。</div>
+                <div class="form-text">管理员可进入设置、AI 模型、提示词等页面；只读仅浏览。</div>
               </div>
               <div class="mb-2">
-                <label class="form-label">初始密码（可留空自动生成）</label>
-                <input class="form-control" type="text" name="password" placeholder="至少 8 位；留空自动生成" />
+                <label class="form-label">初始密码（可留空自动生成强密码）</label>
+                <input class="form-control" type="password" name="password" placeholder="输入密码；留空自动生成强密码" />
               </div>
               <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" value="1" id="activeNew" name="active" checked />
@@ -54,6 +58,8 @@
                     <th>用户名</th>
                     <th>角色</th>
                     <th>状态</th>
+                    <th>最近登录</th>
+                    <th>强制改密</th>
                     <th style="width: 320px;">操作</th>
                   </tr>
                 </thead>
@@ -62,8 +68,12 @@
                     <tr>
                       <td class="fw-semibold">{{ u.username }}</td>
                       <td>
-                        {% if u.is_admin() %}
+                        {% if u.is_owner() %}
+                          <span class="badge text-bg-warning">owner</span>
+                        {% elif u.is_admin() %}
                           <span class="badge text-bg-warning">admin</span>
+                        {% elif u.role == 'readonly' %}
+                          <span class="badge text-bg-info">readonly</span>
                         {% else %}
                           <span class="badge text-bg-secondary">member</span>
                         {% endif %}
@@ -76,15 +86,29 @@
                         {% endif %}
                       </td>
                       <td>
-                        <div class="d-flex flex-wrap gap-2">
-                          <form method="post" action="{{ url_for('users.users_toggle_active', user_id=u.id) }}" onsubmit="return confirm('确认切换账号状态：{{ u.username }}？');">
-                            <button class="btn btn-sm btn-outline-secondary" type="submit">
+                        {{ u.last_login_at.strftime('%Y-%m-%d %H:%M:%S') if u.last_login_at else '-' }}
+                      </td>
+                      <td>
+                        {% if u.must_change_password %}
+                          <span class="badge text-bg-warning">是</span>
+                        {% else %}
+                          <span class="badge text-bg-secondary">否</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <div class="d-flex flex-column flex-md-row flex-wrap gap-2">
+                          <form method="post" action="{{ url_for('users.users_toggle_active', user_id=u.id) }}" onsubmit="return confirm('将切换：{{ u.username }} 状态，且需要管理员密码二次确认。确定继续？');">
+                            <input class="form-control form-control-sm d-inline-block" style="width: 180px;" type="password" name="confirm_admin_password" required placeholder="管理员密码二次确认" />
+                            <button class="btn btn-sm mt-2 {% if u.active %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}" type="submit" {% if u.is_owner() %}disabled{% endif %}>
                               {% if u.active %}禁用{% else %}启用{% endif %}
                             </button>
                           </form>
-                          <form method="post" action="{{ url_for('users.users_reset_password', user_id=u.id) }}" onsubmit="return confirm('确认重置密码：{{ u.username }}？');">
-                            <input class="form-control form-control-sm d-inline-block" style="width: 180px;" name="new_password" placeholder="留空自动生成" />
-                            <button class="btn btn-sm btn-outline-primary" type="submit">重置密码</button>
+
+                          <form method="post" action="{{ url_for('users.users_reset_password', user_id=u.id) }}" onsubmit="return confirm('将重置密码并强制改密：{{ u.username }}，需要管理员密码二次确认。确定继续？');">
+                            <input class="form-control form-control-sm d-inline-block" style="width: 180px;" type="password" name="confirm_admin_password" required placeholder="管理员密码二次确认" />
+                            <button class="btn btn-sm btn-outline-danger mt-2" type="submit">
+                              重置并强制改密
+                            </button>
                           </form>
                         </div>
                       </td>

@@ -42,9 +42,13 @@
               <span>🔗 集成与 API</span>
               <span class="badge text-bg-warning d-none" data-dirty-badge="sec-integrations">未保存</span>
             </button>
-            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data">
-              <span>🗂 数据与选项</span>
-              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-data">未保存</span>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data-manage">
+              <span>🗂 数据管理</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-data-manage">未保存</span>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-backup">
+              <span>🛡️ 备份与恢复</span>
+              <span class="badge text-bg-warning d-none" data-dirty-badge="sec-backup">未保存</span>
             </button>
             <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-security">
               <span>🔐 安全设置（高风险）</span>
@@ -68,8 +72,11 @@
             <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-integrations">
               <span>🔗 集成与 API</span><i class="bi bi-chevron-right"></i>
             </button>
-            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data">
-              <span>🗂 数据与选项</span><i class="bi bi-chevron-right"></i>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-data-manage">
+              <span>🗂 数据管理</span><i class="bi bi-chevron-right"></i>
+            </button>
+            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-backup">
+              <span>🛡️ 备份与恢复</span><i class="bi bi-chevron-right"></i>
             </button>
             <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" type="button" data-module-link="sec-security">
               <span>🔐 安全设置（高风险）</span><i class="bi bi-chevron-right"></i>
@@ -367,7 +374,7 @@
           </div>
 
           <!-- 数据与选项 -->
-          <div class="card d-none" data-module="sec-data">
+          <div class="card d-none" data-module="sec-data-manage">
             <div class="card-body">
               <div class="d-flex align-items-center justify-content-between gap-2">
                 <div class="d-flex align-items-center gap-2">
@@ -377,7 +384,7 @@
               </div>
               <hr class="my-3"/>
 
-              <form method="post" action="{{ url_for('admin.settings_save_data') }}" autocomplete="off" data-module-form="sec-data">
+              <form method="post" action="{{ url_for('admin.settings_save_data') }}" autocomplete="off" data-module-form="sec-data-manage">
                 <div class="row g-3">
                   <div class="col-12">
                     <div class="row g-2 align-items-start">
@@ -467,6 +474,39 @@
               <hr class="my-4"/>
 
               <div class="mt-2">
+                <h6 class="mb-2">🧹 重复项清理（名称+分类+位置一致）</h6>
+                <div class="text-muted small mb-2">
+                  预览重复项数量；确认后会把每组重复中的“多余条目”移入回收站（soft delete）。
+                  这不会硬删除数据库记录。
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="btnDupPreview">
+                    <i class="bi bi-eye me-1"></i>预览重复项
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm" type="button" id="btnDupCleanup">
+                    <i class="bi bi-eraser me-1"></i>一键清理重复项
+                  </button>
+                  <div class="ms-2 alert alert-info p-2 mb-0 d-none" id="dupClearResult" role="alert"></div>
+                </div>
+                <div class="mt-2" id="dupClearDetails"></div>
+              </div>
+
+              <!-- moved to sec-backup module -->
+            </div>
+          </div>
+
+          <!-- 备份与恢复 -->
+          <div class="card d-none" data-module="sec-backup">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="mb-0">🛡️ 备份与恢复</h5>
+                  <span class="badge text-bg-warning d-none" data-unsaved>⚠️ 未保存更改</span>
+                </div>
+              </div>
+              <hr class="my-3"/>
+
+              <div class="mt-2">
                 <h6 class="mb-2">📦 库存数据备份（仅 Item，CSV 模板）</h6>
                 <div class="text-muted small mb-2">
                   导出当前所有库存记录（包含“用完/回收站”项）为一个 CSV 文件，方便在本机/其他服务器做备份或迁移。
@@ -497,8 +537,26 @@
                   使用 <code>.env</code> 中的 B2 配置执行云备份：<code>POST /backup/check</code>、<code>/backup/manual</code>、<code>/backup/restore</code>。
                   云端只保留一个对象（由 <code>BACKUP_TARGET_KEY</code> 指定），每次备份都会覆盖旧文件。
                 </div>
-                <form method="post" action="{{ url_for('admin.settings_save_backup_b2') }}" autocomplete="off" data-module-form="sec-data" class="mb-3">
+                <form method="post" action="{{ url_for('admin.settings_save_backup_b2') }}" autocomplete="off" data-module-form="sec-backup" class="mb-3">
                   <div class="row g-2">
+                    <div class="col-12">
+                      <div class="border rounded-4 p-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                          <div>
+                            <div class="fw-semibold">自动备份开关</div>
+                            <div class="form-text">开启后会按 Cron 在后台自动执行“导出 CSV → 上传覆盖”。时间基准为 UTC。</div>
+                          </div>
+                          <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" name="backup_enabled" value="1" {% if backup_enabled %}checked{% endif %}/>
+                            <label class="form-check-label">启用</label>
+                          </div>
+                        </div>
+                        <div class="mt-2">
+                          <label class="form-label mb-1">定时 Cron（5段：分钟 小时 日 月 星期）</label>
+                          <input class="form-control form-control-sm mono" type="text" name="backup_frequency_cron" value="{{ backup_frequency_cron }}" placeholder="例如：0 3 * * *（每天 03:00 UTC）" />
+                        </div>
+                      </div>
+                    </div>
                     <div class="col-12 col-md-6">
                       <label class="form-label mb-1">B2 Endpoint</label>
                       <input class="form-control form-control-sm" type="text" name="backup_b2_endpoint" value="{{ backup_b2_endpoint }}" placeholder="https://s3.us-east-005.backblazeb2.com" />
@@ -646,9 +704,80 @@
     </div>
   </div>
 
+  <div class="settings-sticky-footer shadow-sm d-flex align-items-center">
+    <div class="container-fluid px-3 px-lg-4">
+      <div class="d-flex justify-content-between align-items-center gap-2">
+        <div class="small text-muted" id="stickyModuleTitle">保存</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary btn-sm" type="button" id="btnStickySave">
+            <i class="bi bi-check2-circle me-1"></i>保存
+          </button>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.index') }}">
+            返回首页
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="height:84px;"></div>
+
+  <style>
+    .settings-sticky-footer{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(248,250,248,.98);
+      border-top: 1px solid var(--border-soft);
+      z-index: 1030;
+      padding: .75rem 0;
+    }
+  </style>
+
+  <!-- 重复项清理：预览模态框 -->
+  <div class="modal fade" id="dupPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 1rem;">
+        <div class="modal-header">
+          <h5 class="modal-title">重复项清理预览</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info p-2 mb-3" role="alert" id="dupPreviewSummary">
+            正在加载预览…
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle" id="dupPreviewTable">
+              <thead>
+                <tr class="text-muted">
+                  <th>名称</th>
+                  <th style="min-width:110px;">分类</th>
+                  <th style="min-width:110px;">位置</th>
+                  <th class="text-end">重复数量</th>
+                  <th class="text-end">保留 id</th>
+                  <th class="text-end">删除数量</th>
+                </tr>
+              </thead>
+              <tbody id="dupPreviewTbody"></tbody>
+            </table>
+          </div>
+          <div class="text-muted small mt-2">
+            规则：每组只保留最小 id，其余移入回收站（soft delete）。
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-danger btn-sm" id="btnDupModalCleanup">
+            <i class="bi bi-eraser me-1"></i>继续清理
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
-      const moduleOrder = ["sec-general","sec-notify","sec-ai","sec-integrations","sec-data","sec-security"];
+      const moduleOrder = ["sec-general","sec-notify","sec-ai","sec-integrations","sec-data-manage","sec-backup","sec-security"];
       const dirty = Object.fromEntries(moduleOrder.map((k) => [k, false]));
       let active = "sec-general";
 
@@ -684,12 +813,28 @@
           "sec-notify": "📧 通知设置",
           "sec-ai": "🤖 AI 设置",
           "sec-integrations": "🔗 集成与 API",
-          "sec-data": "🗂 数据与选项",
+          "sec-data-manage": "🗂 数据管理",
+          "sec-backup": "🛡️ 备份与恢复",
           "sec-security": "🔐 安全设置（高风险）",
         };
         const title = map[moduleId] || "";
         const el = document.getElementById("mobileModuleTitle");
         if (el) el.textContent = title;
+      }
+
+      function updateStickyTitle(moduleId) {
+        const map = {
+          "sec-general": "基础设置",
+          "sec-notify": "通知设置",
+          "sec-ai": "AI 设置",
+          "sec-integrations": "API 集成",
+          "sec-data-manage": "数据管理",
+          "sec-backup": "备份与恢复",
+          "sec-security": "安全设置",
+        };
+        const el = document.getElementById("stickyModuleTitle");
+        if (!el) return;
+        el.textContent = map[moduleId] ? `保存：${map[moduleId]}` : "保存";
       }
 
       function showModule(moduleId, { pushHash } = { pushHash: true }) {
@@ -705,6 +850,7 @@
         });
         updateNavActive(active);
         updateMobileHeader(active);
+        updateStickyTitle(active);
 
         const mobileHeader = document.getElementById("settingsMobileHeader");
         const mobileList = document.getElementById("settingsNavMobileList");
@@ -860,6 +1006,20 @@
       const init = moduleOrder.includes(byHash) ? byHash : (moduleOrder.includes(byStore) ? byStore : "sec-general");
       showModule(init, { pushHash: true });
 
+      document.getElementById("btnStickySave")?.addEventListener("click", () => {
+        const form = document.querySelector(`form[data-module-form="${active}"]`);
+        if (!form) {
+          window.alert("当前模块没有可保存的表单。");
+          return;
+        }
+        try {
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.submit();
+        } catch (e) {
+          form.submit();
+        }
+      });
+
       async function testEngine(kind) {
         const sel = document.querySelector(`[data-engine-select="${kind}"]`);
         const out = document.querySelector(`[data-engine-test-result="${kind}"]`);
@@ -933,6 +1093,113 @@
         const ok = window.confirm("将从云端下载备份 CSV 并覆盖当前库存数据（清空并重建），确定继续？");
         if (!ok) return;
         callBackupApi("{{ url_for('backup_api.backup_restore') }}", "恢复");
+      });
+
+      let lastDupPreview = null;
+
+      function showDupResultAlert(type, htmlText) {
+        const resultEl = document.getElementById("dupClearResult");
+        const detailsEl = document.getElementById("dupClearDetails");
+        if (!resultEl || !detailsEl) return;
+        resultEl.classList.remove("alert-success", "alert-danger", "alert-info");
+        resultEl.classList.add(type === "success" ? "alert-success" : (type === "danger" ? "alert-danger" : "alert-info"));
+        resultEl.innerHTML = htmlText || "";
+        resultEl.classList.remove("d-none");
+        detailsEl.textContent = "";
+      }
+
+      function renderDupPreviewModal(data) {
+        lastDupPreview = data || null;
+        const summaryEl = document.getElementById("dupPreviewSummary");
+        const tbodyEl = document.getElementById("dupPreviewTbody");
+        if (!summaryEl || !tbodyEl) return;
+
+        if (!data || !data.success) {
+          summaryEl.textContent = "预览失败";
+          tbodyEl.innerHTML = "";
+          return;
+        }
+
+        const before = data.before_total ?? "-";
+        const afterPreview = data.after_total_preview ?? "-";
+        const del = data.to_delete_count ?? "-";
+
+        summaryEl.innerHTML = `预览：预览前 <b>${before}</b>；预计清理后 <b>${afterPreview}</b>；预计删除 <b>${del}</b>。`;
+
+        const groups = Array.isArray(data.dup_groups) ? data.dup_groups : [];
+        if (!groups.length) {
+          tbodyEl.innerHTML = `<tr><td colspan="6" class="text-muted text-center">未发现重复项</td></tr>`;
+          return;
+        }
+
+        tbodyEl.innerHTML = groups
+          .map((g) => {
+            const keepId = (g.keep_id ?? "").toString();
+            const delCount = (g.delete_count ?? "").toString();
+            return `
+              <tr>
+                <td>${g.name ?? ""}</td>
+                <td>${g.category ?? ""}</td>
+                <td>${g.location ?? ""}</td>
+                <td class="text-end">${g.count ?? ""}</td>
+                <td class="text-end">${keepId}</td>
+                <td class="text-end">${delCount}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      async function previewDup() {
+        const resp = await fetch("{{ url_for('admin.items_duplicates_preview') }}", { method: "POST" });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data || !data.success) {
+          showDupResultAlert("danger", `❌ 预览失败：${data.code || data.error || data.message || "未知错误"}`);
+          renderDupPreviewModal(null);
+          return;
+        }
+
+        renderDupPreviewModal(data);
+        const modalEl = document.getElementById("dupPreviewModal");
+        const modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+        modal?.show();
+      }
+
+      async function cleanupDup() {
+        const modalEl = document.getElementById("dupPreviewModal");
+        const modal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+        const btn = document.getElementById("btnDupModalCleanup");
+        if (btn) btn.disabled = true;
+        try {
+          const resp = await fetch("{{ url_for('admin.items_duplicates_cleanup') }}", { method: "POST" });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data || !data.success) {
+            showDupResultAlert("danger", `❌ 清理失败：${data.code || data.error || data.message || "未知错误"}`);
+            return;
+          }
+          const before = data.before_total ?? "-";
+          const del = data.to_delete_count ?? "-";
+          const after = data.after_total_actual ?? "-";
+          showDupResultAlert("success", `✅ 清理完成：移入回收站 <b>${del}</b> 条；清理后活动总数 <b>${after}</b>（之前 <b>${before}</b>）。`);
+          modal?.hide();
+        } catch (e) {
+          showDupResultAlert("danger", "❌ 清理失败（网络/服务异常）");
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      document.getElementById("btnDupPreview")?.addEventListener("click", () => {
+        previewDup();
+      });
+
+      document.getElementById("btnDupCleanup")?.addEventListener("click", () => {
+        // 一键清理 = 先预览（模态框展示），再在模态框里“继续清理”完成二次确认
+        previewDup();
+      });
+
+      document.getElementById("btnDupModalCleanup")?.addEventListener("click", () => {
+        cleanupDup();
       });
     })();
   </script>

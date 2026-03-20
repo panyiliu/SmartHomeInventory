@@ -80,6 +80,11 @@ def admin_settings():
     b2_access_key_id_val = get_secret_setting(setting_key="backup_b2_access_key_id", env_key="B2_ACCESS_KEY_ID")
     b2_application_key_val = get_secret_setting(setting_key="backup_b2_application_key", env_key="B2_APPLICATION_KEY")
 
+    backup_enabled_val = (os.environ.get("BACKUP_ENABLED") or get_setting("backup_enabled", "0") or "0").strip()
+    backup_cron_val = (os.environ.get("BACKUP_FREQUENCY_CRON") or get_setting("backup_frequency_cron", "") or "").strip()
+    if not backup_cron_val:
+        backup_cron_val = "0 3 * * *"
+
     email_history_count = EmailLog.query.count()
 
     # New: ability -> engine (AiModel) selection
@@ -139,6 +144,8 @@ def admin_settings():
         b2_access_key_id_tail=_mask_tail(b2_access_key_id_val, keep=4) if b2_access_key_id_val else "",
         b2_application_key_is_set=bool(b2_application_key_val),
         b2_application_key_tail=_mask_tail(b2_application_key_val, keep=4) if b2_application_key_val else "",
+        backup_enabled=(backup_enabled_val or "0").strip() in {"1", "true", "True", "yes", "on", "ON"},
+        backup_frequency_cron=backup_cron_val,
         category_options_json=dump_option_list(cat_list),
         location_options_json=dump_option_list(loc_list),
         category_icon_map_json=category_icon_map_json,
@@ -181,7 +188,7 @@ def settings_save_data():
         json.loads(loc_raw) if loc_raw else []
     except Exception:
         flash("保存失败：分类/位置选项格式不正确。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+        return redirect(url_for("admin.admin_settings", _anchor="sec-data-manage"))
     if cat_raw:
         set_setting("category_options", cat_raw)
     if loc_raw:
@@ -199,7 +206,7 @@ def settings_save_data():
         json.loads(loc_label_raw) if loc_label_raw else {}
     except Exception:
         flash("保存失败：图标/短标签映射 JSON 格式不正确。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+        return redirect(url_for("admin.admin_settings", _anchor="sec-data-manage"))
     if cat_icon_raw:
         set_setting("category_icon_map_json", cat_icon_raw)
     if loc_icon_raw:
@@ -209,7 +216,7 @@ def settings_save_data():
     if loc_label_raw:
         set_setting("location_label_map_json", loc_label_raw)
     flash("数据与选项已保存。", "success")
-    return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+    return redirect(url_for("admin.admin_settings", _anchor="sec-data-manage"))
 
 
 @bp.post("/settings/notify")
@@ -224,7 +231,7 @@ def settings_save_notify():
     set_setting("smtp_user", (request.form.get("smtp_user") or "").strip())
     set_setting("smtp_to", (request.form.get("smtp_to") or "").strip())
     flash("通知与 AI 已保存。", "success")
-    return redirect(url_for("admin.admin_settings", _anchor="sec-notify-ai"))
+    return redirect(url_for("admin.admin_settings", _anchor="sec-notify"))
 
 
 @bp.post("/settings/integrations")
@@ -269,8 +276,23 @@ def settings_save_backup_b2():
     if new_app_key:
         set_setting("backup_b2_application_key", new_app_key)
 
+    auto_enabled = (request.form.get("backup_enabled") or "").strip()
+    set_setting("backup_enabled", "1" if auto_enabled == "1" else "0")
+    set_setting(
+        "backup_frequency_cron",
+        (request.form.get("backup_frequency_cron") or "").strip() or "0 3 * * *",
+    )
+
+    # Reschedule background job immediately (no need to restart container).
+    try:
+        from ..services.backup_scheduler import reschedule_backup_job
+
+        reschedule_backup_job(current_app)
+    except Exception:
+        pass
+
     flash("B2 备份配置已保存。", "success")
-    return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+    return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
 
 
 @bp.post("/settings/ai")
@@ -352,7 +374,7 @@ def items_import():
     f = request.files.get("items_file")
     if not f or not f.filename:
         flash("请选择要导入的 CSV 备份文件。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+        return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
 
     try:
         raw_bytes = f.read()
@@ -361,7 +383,7 @@ def items_import():
             raw_bytes = f.read()
         except Exception:
             flash("导入失败：无法读取文件内容。", "danger")
-            return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+            return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
 
     try:
         text = raw_bytes.decode("utf-8-sig")
@@ -370,7 +392,7 @@ def items_import():
             text = raw_bytes.decode("utf-8", errors="ignore")
         except Exception:
             flash("导入失败：无法解码 CSV 文件。", "danger")
-            return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+            return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
 
     # Backward compatibility: legacy JSON backups
     trimmed = (text or "").lstrip()
@@ -454,7 +476,7 @@ def items_import():
                     flash(f"已导入 {imported} 条库存记录（追加导入，未删除现有数据）。", "success")
                 else:
                     flash("导入完成：未发现有效的库存记录。", "warning")
-                return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+                return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
         except Exception:
             # Fall back to CSV parsing
             pass
@@ -468,7 +490,7 @@ def items_import():
         reader = csv.DictReader(io.StringIO(text), dialect=dialect)
     except Exception:
         flash("导入失败：CSV 解析失败。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+        return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
 
     def _parse_dt(v: Any) -> datetime | None:
         if v is None:
@@ -556,7 +578,122 @@ def items_import():
     else:
         flash("导入完成：未发现有效的库存记录。", "warning")
 
-    return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+    return redirect(url_for("admin.admin_settings", _anchor="sec-backup"))
+
+
+def _duplicate_key(name: str, category: str, location: str) -> tuple[str, str, str]:
+    return ((name or "").strip(), (category or "").strip(), (location or "").strip())
+
+
+@bp.post("/items/duplicates/preview")
+@admin_required
+def items_duplicates_preview():
+    """
+    预览重复项（仅针对未删除 items）。
+    重复定义：name + category + location 三者完全一致（去两端空格）。
+    规则：每组只保留最小 id，其余进入回收站（soft delete）。
+    """
+    rows = (
+        Item.query.with_entities(Item.id, Item.name, Item.category, Item.location)
+        .filter(Item.deleted_at.is_(None))
+        .order_by(Item.name.asc(), Item.category.asc(), Item.location.asc(), Item.id.asc())
+        .all()
+    )
+    before_total = len(rows)
+
+    first_id_by_key: dict[tuple[str, str, str], int] = {}
+    dup_count_by_key: dict[tuple[str, str, str], int] = {}
+    to_delete_ids: list[int] = []
+
+    for item_id, name, category, location in rows:
+        k = _duplicate_key(name, category, location)
+        dup_count_by_key[k] = dup_count_by_key.get(k, 0) + 1
+        if k not in first_id_by_key:
+            first_id_by_key[k] = item_id
+        else:
+            to_delete_ids.append(item_id)
+
+    to_delete_count = len(to_delete_ids)
+    after_total_preview = max(0, before_total - to_delete_count)
+
+    dup_groups = []
+    for k, c in dup_count_by_key.items():
+        if not (c and c > 1):
+            continue
+        dup_groups.append(
+            {
+                "name": k[0],
+                "category": k[1],
+                "location": k[2],
+                "count": c,
+                "keep_id": first_id_by_key.get(k),
+                "delete_count": c - 1,
+            }
+        )
+    dup_groups.sort(key=lambda x: (-x["count"], x["name"], x["category"], x["location"]))
+
+    return {
+        "success": True,
+        "before_total": before_total,
+        "to_delete_count": to_delete_count,
+        "after_total_preview": after_total_preview,
+        "dup_groups": dup_groups[:20],
+        "kept_strategy": "每组保留最小 id，其余移入回收站",
+    }
+
+
+@bp.post("/items/duplicates/cleanup")
+@admin_required
+def items_duplicates_cleanup():
+    """
+    一键清理重复项（soft delete）。
+    同预览逻辑：name + category + location 完全一致（去两端空格），保留每组最小 id，其余 deleted_at=now。
+    """
+    rows = (
+        Item.query.with_entities(Item.id, Item.name, Item.category, Item.location)
+        .filter(Item.deleted_at.is_(None))
+        .order_by(Item.name.asc(), Item.category.asc(), Item.location.asc(), Item.id.asc())
+        .all()
+    )
+    before_total = len(rows)
+
+    first_id_by_key: dict[tuple[str, str, str], int] = {}
+    to_delete_ids: list[int] = []
+
+    for item_id, name, category, location in rows:
+        k = _duplicate_key(name, category, location)
+        if k not in first_id_by_key:
+            first_id_by_key[k] = item_id
+        else:
+            to_delete_ids.append(item_id)
+
+    if not to_delete_ids:
+        after_total_actual = before_total
+        return {
+            "success": True,
+            "before_total": before_total,
+            "to_delete_count": 0,
+            "after_total_actual": after_total_actual,
+            "dup_groups": [],
+            "message": "未发现重复项",
+        }
+
+    now = datetime.utcnow()
+    # Soft delete duplicates: move to recycle bin.
+    (
+        Item.query.filter(Item.id.in_(to_delete_ids))
+        .update({Item.deleted_at: now, Item.updated_at: now}, synchronize_session=False)
+    )
+    db.session.commit()
+
+    after_total_actual = Item.query.filter(Item.deleted_at.is_(None)).count()
+    return {
+        "success": True,
+        "before_total": before_total,
+        "to_delete_count": len(to_delete_ids),
+        "after_total_actual": int(after_total_actual),
+        "message": "重复项清理完成（已移入回收站）",
+    }
 
 
 # Backward-compatible endpoint (kept, but UI no longer posts here)

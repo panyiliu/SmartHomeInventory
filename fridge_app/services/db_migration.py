@@ -59,5 +59,9 @@ def ensure_schema(db: SQLAlchemy) -> None:
             db.session.execute(db.text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
         if "last_login_at" not in user_cols:
             db.session.execute(db.text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
+        if "must_change_password" not in user_cols:
+            db.session.execute(
+                db.text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0")
+            )
         db.session.commit()
 
