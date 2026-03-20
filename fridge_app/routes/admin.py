@@ -30,7 +30,7 @@ from ..services.settings_service import (
 from ..models import AiModel
 from ..models import AiPromptTemplate
 from ..utils.auth import admin_required
-from ..utils.ai_text import generate_icon_candidates_for_names, PROMPT_ICON_SUGGEST
+from ..utils.ai_text import generate_icon_candidates_for_names
 from ..services.ai_job_service import ai_job_service
 
 
@@ -122,8 +122,6 @@ def admin_settings():
     engine_text = _get_engine(_sel("ai_engine_text_model_id"))
     engine_recipes = _get_engine(_sel("ai_engine_recipes_model_id"))
     engine_icon_suggest = _get_engine(_sel("ai_engine_icon_suggest_model_id"))
-    # Prompt: editable in settings; fallback to built-in.
-    icon_suggest_prompt = (get_setting("ai_icon_suggest_prompt", "") or "").strip() or PROMPT_ICON_SUGGEST
     # (MVP) only keep abilities already used in app: vision/text/recipes
 
     return render_template(
@@ -174,7 +172,6 @@ def admin_settings():
         engine_recipes=engine_recipes,
         engine_icon_suggest=engine_icon_suggest,
         ai_engine_icon_suggest_id=_sel("ai_engine_icon_suggest_model_id"),
-        icon_suggest_prompt=icon_suggest_prompt,
     )
 
 
@@ -630,7 +627,6 @@ def settings_save_ai_engines():
     set_setting("ai_engine_text_model_id", (request.form.get("ai_engine_text_model_id") or "").strip())
     set_setting("ai_engine_recipes_model_id", (request.form.get("ai_engine_recipes_model_id") or "").strip())
     set_setting("ai_engine_icon_suggest_model_id", (request.form.get("ai_engine_icon_suggest_model_id") or "").strip())
-    set_setting("ai_icon_suggest_prompt", (request.form.get("ai_icon_suggest_prompt") or "").strip())
     flash("能力引擎选择已保存。", "success")
     return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
 

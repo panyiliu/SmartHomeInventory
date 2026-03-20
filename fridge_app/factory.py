@@ -27,6 +27,7 @@ from .routes.users import bp as users_bp
 from .services.db_migration import ensure_schema
 from .utils.doubao_core import FIXED_PROMPT as VISION_DEFAULT_PROMPT
 from .utils.ai_text import PROMPT_TEXT_TO_ITEMS as TEXT_DEFAULT_PROMPT
+from .utils.ai_text import PROMPT_ICON_SUGGEST as ICON_SUGGEST_DEFAULT_PROMPT
 from .services.settings_service import (
     DEFAULT_CATEGORY_ICON_MAP,
     DEFAULT_LOCATION_ICON_MAP,
@@ -128,6 +129,7 @@ def create_app() -> Flask:
         text_default_prompt = TEXT_DEFAULT_PROMPT
 
         interface_test_default_prompt = "你好，请回复“测试成功”。"
+        icon_suggest_default_prompt = ICON_SUGGEST_DEFAULT_PROMPT
 
         def ensure_prompt(category_code: str, name: str, content: str) -> None:
             row = db.session.query(AiPromptTemplate).filter_by(category_code=category_code).first()
@@ -158,6 +160,7 @@ def create_app() -> Flask:
         ensure_prompt("vision_recognize", "默认图像识别提示词", vision_default_prompt)
         ensure_prompt("text_extract", "默认文字识别提示词", text_default_prompt)
         ensure_prompt("interface_test", "默认接口测试提示词", interface_test_default_prompt)
+        ensure_prompt("icon_suggest", "默认图标建议提示词", icon_suggest_default_prompt)
         db.session.commit()
 
         # Seed default AI models for MVP connectivity testing.
