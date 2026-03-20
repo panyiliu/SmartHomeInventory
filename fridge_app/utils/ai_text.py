@@ -10,8 +10,8 @@ import requests
 
 
 from .prompt_templates import get_prompt_content
-from ..services.settings_service import get_category_options, get_location_options, normalize_icon_spec
-from .ai_engine_runtime import text_extract_with_engine
+from ..services.settings_service import get_category_options, get_location_options, get_setting, normalize_icon_spec
+from .ai_engine_runtime import text_extract_icon_suggest_with_engine
 
 PROMPT_TEXT_TO_ITEMS = """
 你是家庭食材物品识别助手。
@@ -109,7 +109,8 @@ def generate_icon_candidates_for_names(
         {"kind": kind_norm, "kind_label": kind_label, "items": cleaned, "candidates": n},
         ensure_ascii=False,
     )
-    engine_any = text_extract_with_engine(user_text, prompt=PROMPT_ICON_SUGGEST)
+    icon_prompt = (get_setting("ai_icon_suggest_prompt", "") or "").strip() or PROMPT_ICON_SUGGEST
+    engine_any = text_extract_icon_suggest_with_engine(user_text, prompt=icon_prompt)
     if engine_any is None:
         return {}
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import traceback
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from ...extensions import db
 from ...models import Item
@@ -11,6 +11,7 @@ from ...services.barcode_service import barcode_lookup
 from ...services.settings_service import safe_int
 from ...utils.ai_image import recognize_foods_from_image
 from ...utils.ai_text import extract_items_from_text
+from ...services.ai_job_service import ai_job_service
 
 
 bp = Blueprint("items_api", __name__)
@@ -114,10 +115,23 @@ def api_ai_recognize_food():
     f = request.files.get("image")
     if not f:
         return jsonify({"ok": False, "error": "缺少图片"}), 400
+
+    async_flag_raw = (request.form.get("async") or request.args.get("async") or "").strip().lower()
+    async_flag = async_flag_raw in {"1", "true", "yes", "on"}
     try:
         img = f.read()
         if not img:
             return jsonify({"ok": False, "error": "缺少图片"}), 400
+
+        if async_flag:
+            job_id = ai_job_service.create_job(
+                kind="ai_recognize_food",
+                fn=lambda: recognize_foods_from_image(img),
+                meta={"image_size": len(img)},
+                app=current_app._get_current_object(),
+            )
+            return jsonify({"ok": True, "async": True, "job_id": job_id})
+
         items = recognize_foods_from_image(img)
         return jsonify({"ok": True, "data": items})
     except RuntimeError as e:
@@ -147,7 +161,20 @@ def api_ai_parse_text():
     text = (payload.get("text") or "").strip()
     if not text:
         return jsonify({"ok": False, "error": "请输入要解析的文本"}), 400
+
+    async_flag_in_json = bool(payload.get("async")) if "async" in payload else False
+    async_flag_qs = str(request.args.get("async") or "").strip().lower() in {"1", "true", "yes", "on"}
+    async_flag = async_flag_in_json or async_flag_qs
     try:
+        if async_flag:
+            job_id = ai_job_service.create_job(
+                kind="ai_parse_text",
+                fn=lambda: extract_items_from_text(text),
+                meta={"text_len": len(text)},
+                app=current_app._get_current_object(),
+            )
+            return jsonify({"ok": True, "async": True, "job_id": job_id})
+
         items = extract_items_from_text(text)
         return jsonify({"ok": True, "data": items})
     except RuntimeError as e:

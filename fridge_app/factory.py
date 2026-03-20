@@ -624,6 +624,13 @@ def create_app() -> Flask:
     app.register_blueprint(backup_api_bp)
     app.register_blueprint(recipes_bp)
     app.register_blueprint(recipes_api_bp)
+    # AI jobs (async result polling)
+    try:
+        from .routes.api.ai_jobs import bp as ai_jobs_api_bp
+
+        app.register_blueprint(ai_jobs_api_bp)
+    except Exception as e:
+        print(f"[AIJobs] failed to register blueprint: {e}")
     app.register_blueprint(ai_models_bp)
     app.register_blueprint(ai_prompts_bp)
     app.register_blueprint(users_bp)

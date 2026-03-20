@@ -313,6 +313,29 @@
                         <span class="small text-muted" data-engine-test-result="recipes"></span>
                       </div>
                     </div>
+
+                    <div class="col-12">
+                      <label class="form-label mb-0">图标建议/补全</label>
+                      <div class="d-flex gap-2 mt-2 align-items-center">
+                        <select class="form-select" name="ai_engine_icon_suggest_model_id" data-engine-select="icon-suggest">
+                          <option value="" {% if not ai_engine_icon_suggest_id %}selected{% endif %}>（跟随文本解析引擎）</option>
+                          {% for e in text_engines %}
+                            <option value="{{ e.id }}" {% if ai_engine_icon_suggest_id == (e.id|string) %}selected{% endif %}>
+                              {{ e.display_name or e.name }} — {{ e.api_type }} / {{ e.model_name }}
+                            </option>
+                          {% endfor %}
+                        </select>
+                        <button class="btn btn-outline-success btn-sm" type="button" data-engine-test="icon-suggest">测试</button>
+                        <span class="small text-muted" data-engine-test-result="icon-suggest"></span>
+                      </div>
+                      <div class="form-text mt-1">不指定时自动使用“文本解析”引擎（默认行为）。</div>
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label mb-0">图标生成提示词（可编辑）</label>
+                      <div class="form-text">用于“AI补全缺失图标”生成候选；默认已强制要求返回严格 JSON 数组。</div>
+                      <textarea class="form-control mono mt-2" name="ai_icon_suggest_prompt" rows="8" id="aiIconSuggestPromptRaw">{{ icon_suggest_prompt }}</textarea>
+                    </div>
                   </div>
 
                   <div class="d-flex gap-2 mt-4">
@@ -484,12 +507,16 @@
                             候选数量
                             <input id="aiFillIconCandidatesPerItem" class="form-control form-control-sm mono d-inline-block ms-1" style="width:90px;" type="number" min="1" max="5" value="3" />
                           </label>
-                          <button type="button" class="btn btn-outline-primary btn-sm" id="btnAiFillMissingIcons">
-                            <i class="bi bi-magic me-1"></i>AI生成并回填
+                          <button type="button" class="btn btn-outline-primary btn-sm" id="btnAiFillMissingIconsSuggest">
+                            <i class="bi bi-magic me-1"></i>生成候选并选择
+                          </button>
+                          <button type="button" class="btn btn-outline-success btn-sm d-none" id="btnAiFillMissingIconsApply">
+                            <i class="bi bi-check2-circle me-1"></i>应用选择并回填
                           </button>
                         </div>
                         <div class="mt-2 small text-muted" id="aiFillIconsMissingList"></div>
                         <div class="mt-2 alert alert-info p-2 mb-0 d-none" id="aiFillIconsResult" role="alert"></div>
+                        <div class="mt-3 d-none" id="aiFillIconsCandidatesWrap"></div>
                       </div>
                     </div>
                   </div>
@@ -1861,25 +1888,181 @@
           }
         }
 
-        document.getElementById("btnAiFillMissingIcons")?.addEventListener("click", async () => {
+        const AI_ICON_JOB_STORAGE_KEY = "ai_icon_suggest_job_id";
+        let aiIconSuggestJobId = null;
+        let aiIconSuggestPollingTimer = null;
+        let aiIconSuggestPollStartedAt = 0;
+
+        function setIconsStatus(type, text) {
           const resultEl = document.getElementById("aiFillIconsResult");
-          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
-          if (resultEl) {
-            resultEl.classList.remove("d-none", "alert-danger", "alert-info", "alert-success");
-            resultEl.classList.add("alert-info");
-            resultEl.textContent = "AI 生成中…（可能需要几秒）";
+          if (!resultEl) return;
+          resultEl.classList.remove("d-none", "alert-danger", "alert-info", "alert-success");
+          resultEl.classList.add(type === "success" ? "alert-success" : (type === "danger" ? "alert-danger" : "alert-info"));
+          resultEl.textContent = text || "";
+        }
+
+        function setIconsButtonsDisabled(disabled) {
+          const btnSuggest = document.getElementById("btnAiFillMissingIconsSuggest");
+          const btnApply = document.getElementById("btnAiFillMissingIconsApply");
+          if (btnSuggest) btnSuggest.disabled = !!disabled;
+          if (btnApply) btnApply.disabled = !!disabled;
+        }
+
+        function escapeHtml(s) {
+          return String(s ?? "").replace(/[&<>"']/g, (c) => {
+            const m = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+            return m[c] || c;
+          });
+        }
+
+        function renderCandidatesUI(jobResult) {
+          const wrapEl = document.getElementById("aiFillIconsCandidatesWrap");
+          const btnApply = document.getElementById("btnAiFillMissingIconsApply");
+          if (!wrapEl) return;
+
+          const catMap = jobResult?.category_candidates && typeof jobResult.category_candidates === "object" ? jobResult.category_candidates : {};
+          const locMap = jobResult?.location_candidates && typeof jobResult.location_candidates === "object" ? jobResult.location_candidates : {};
+
+          const blocks = [];
+
+          function renderKindBlock(kindLabel, kind, mapObj) {
+            const entries = Object.entries(mapObj || {});
+            if (!entries.length) {
+              return `<div class="text-muted small mb-2">${escapeHtml(kindLabel)}：—</div>`;
+            }
+            const rows = entries.map(([name, cands], idx) => {
+              const safeName = escapeHtml(name);
+              const safeRowId = `${kind}_${idx}`.replace(/[^a-zA-Z0-9_\\-]/g, "_");
+              const candidates = Array.isArray(cands) ? cands : [];
+              const options = candidates.length
+                ? candidates.map((sp, i) => {
+                    const selected = i === 0 ? "selected" : "";
+                    return `<option value="${escapeHtml(sp)}" ${selected}>${escapeHtml(sp)}</option>`;
+                  }).join("")
+                : `<option value="">（无）</option>`;
+
+              const defaultSpec = candidates.length ? candidates[0] : "";
+              const tv = iconSpecToTypeValue(defaultSpec);
+              const previewHtml = renderIconPreview(tv.type, tv.value);
+
+              return `
+                <div class="border rounded-3 p-2 mb-2 bg-white">
+                  <div class="d-flex align-items-start justify-content-between gap-2">
+                    <div>
+                      <div class="fw-semibold small text-break">${safeName}</div>
+                      <select class="form-select form-select-sm mt-1" data-ai-icon-kind="${escapeHtml(kind)}" data-ai-icon-name="${escapeHtml(name)}" data-ai-icon-row="${escapeHtml(safeRowId)}">
+                        ${options}
+                      </select>
+                    </div>
+                    <div class="text-center" style="min-width:64px;">
+                      <div class="text-muted small">预览</div>
+                      <div style="min-height:22px;" data-ai-icon-preview="${escapeHtml(safeRowId)}">${previewHtml}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join("");
+            return `<div class="mb-2"><div class="fw-semibold small text-muted">${escapeHtml(kindLabel)}</div>${rows}</div>`;
           }
 
+          blocks.push(renderKindBlock("分类缺失", "category", catMap));
+          blocks.push(renderKindBlock("位置缺失", "location", locMap));
+
+          wrapEl.innerHTML = blocks.join("");
+          wrapEl.classList.remove("d-none");
+
+          // Bind preview updates
+          wrapEl.querySelectorAll("select[data-ai-icon-preview]").forEach(() => {});
+          const selects = wrapEl.querySelectorAll("select[data-ai-icon-row]");
+          selects.forEach((sel) => {
+            const rowId = sel.getAttribute("data-ai-icon-row") || "";
+            const previewEl = wrapEl.querySelector(`[data-ai-icon-preview="${CSS.escape(rowId)}"]`);
+            if (!previewEl) return;
+            const update = () => {
+              const spec = sel.value || "";
+              const tv = iconSpecToTypeValue(spec);
+              previewEl.innerHTML = renderIconPreview(tv.type, tv.value);
+            };
+            sel.addEventListener("change", update);
+            update();
+          });
+
+          if (btnApply) {
+            btnApply.classList.remove("d-none");
+          }
+        }
+
+        async function pollAiIconSuggestJob(jobId, startedAt) {
+          const statusUrl = `/api/ai/jobs/${jobId}`;
+          const backoffMaxMs = 4000;
+
+          let attempt = 0;
+          const tick = async () => {
+            attempt += 1;
+            try {
+              const resp = await fetch(statusUrl, { method: "GET" });
+              const data = await resp.json().catch(() => ({}));
+              if (!resp.ok || !data.ok) {
+                setIconsStatus("danger", `❌ 生成候选失败：${data.error || "未知错误"}`);
+                setIconsButtonsDisabled(false);
+                return;
+              }
+              if (data.status === "running") {
+                const waited = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0;
+                setIconsStatus("info", `⏳ 正在生成候选…（已等待 ${waited}s）`);
+                const delay = Math.min(backoffMaxMs, 1500 + attempt * 250);
+                aiIconSuggestPollingTimer = window.setTimeout(tick, delay);
+                return;
+              }
+              if (data.status === "success") {
+                setIconsStatus("success", "✅ 候选已生成。请选择每个条目的图标，再点击“应用选择并回填”。");
+                renderCandidatesUI(data.result || {});
+                setIconsButtonsDisabled(false);
+                localStorage.removeItem(AI_ICON_JOB_STORAGE_KEY);
+                localStorage.setItem(AI_ICON_JOB_STORAGE_KEY, jobId);
+                return;
+              }
+              if (data.status === "error") {
+                setIconsStatus("danger", `❌ 生成候选失败：${data.error || "未知错误"}`);
+                setIconsButtonsDisabled(false);
+                return;
+              }
+              setIconsStatus("danger", "❌ 生成候选失败：未知状态");
+              setIconsButtonsDisabled(false);
+            } catch (e) {
+              setIconsStatus("danger", "❌ 网络或服务异常（轮询失败）");
+              setIconsButtonsDisabled(false);
+            }
+          };
+
+          // First immediate tick
+          tick();
+        }
+
+        async function startAiIconSuggest() {
+          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+          const btnSuggest = document.getElementById("btnAiFillMissingIconsSuggest");
           const maxItemsRaw = document.getElementById("aiFillIconMaxItems")?.value;
           const candsRaw = document.getElementById("aiFillIconCandidatesPerItem")?.value;
           const maxItems = Math.max(1, parseInt(maxItemsRaw || "20", 10) || 20);
           const candidatesPerItem = Math.max(1, parseInt(candsRaw || "3", 10) || 3);
 
-          const ok = window.confirm(`将对最多 ${maxItems} 个缺失条目自动生成并回填首选图标（每项候选 ${candidatesPerItem} 个）。确定继续？`);
+          const ok = window.confirm(`将对最多 ${maxItems} 个缺失条目生成候选图标（每项候选 ${candidatesPerItem} 个），之后你可以逐条选择并回填。确定继续？`);
           if (!ok) return;
 
+          const wrapEl = document.getElementById("aiFillIconsCandidatesWrap");
+          if (wrapEl) {
+            wrapEl.innerHTML = "";
+            wrapEl.classList.add("d-none");
+          }
+          const btnApply = document.getElementById("btnAiFillMissingIconsApply");
+          if (btnApply) btnApply.classList.add("d-none");
+
+          setIconsButtonsDisabled(true);
+          setIconsStatus("info", "⏳ 正在生成候选…（可能需要几秒）");
+
           try {
-            const resp = await fetch("{{ url_for('admin.icons_missing_generate') }}", {
+            const resp = await fetch("{{ url_for('admin.icons_missing_suggest_async') }}", {
               method: "POST",
               headers: { "Content-Type": "application/json", ...(token ? { "X-CSRFToken": token } : {}) },
               body: JSON.stringify({ max_items: maxItems, candidates_per_item: candidatesPerItem })
@@ -1887,33 +2070,116 @@
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok || !data || !data.ok) {
               const msg = data?.error || data?.message || "生成失败";
-              if (resultEl) {
-                resultEl.classList.remove("alert-info");
-                resultEl.classList.add("alert-danger");
-                resultEl.textContent = `❌ ${msg}`;
-              } else {
-                window.alert(`生成失败：${msg}`);
-              }
+              setIconsStatus("danger", `❌ ${msg}`);
+              setIconsButtonsDisabled(false);
               return;
             }
-
-            if (resultEl) {
-              resultEl.classList.remove("alert-info");
-              resultEl.classList.add("alert-success");
-              const a = data.applied || {};
-              resultEl.textContent = `✅ 已回填：分类 ${a.categories ?? 0} / 位置 ${a.locations ?? 0}。正在刷新…`;
+            aiIconSuggestJobId = String(data.job_id || "").trim();
+            if (!aiIconSuggestJobId) {
+              setIconsStatus("danger", "❌ job_id 为空，无法继续");
+              setIconsButtonsDisabled(false);
+              return;
             }
-            window.location.reload();
+            localStorage.setItem(AI_ICON_JOB_STORAGE_KEY, aiIconSuggestJobId);
+            aiIconSuggestPollStartedAt = Date.now();
+            pollAiIconSuggestJob(aiIconSuggestJobId, aiIconSuggestPollStartedAt);
           } catch (e) {
-            if (resultEl) {
-              resultEl.classList.remove("alert-info");
-              resultEl.classList.add("alert-danger");
-              resultEl.textContent = "❌ 网络或服务异常";
-            }
+            setIconsStatus("danger", "❌ 网络或服务异常");
+            setIconsButtonsDisabled(false);
           }
+        }
+
+        async function applyAiIconSuggest() {
+          const jobId = localStorage.getItem(AI_ICON_JOB_STORAGE_KEY) || aiIconSuggestJobId;
+          if (!jobId) {
+            setIconsStatus("danger", "❌ 未找到可应用的 job_id，请先生成候选。");
+            return;
+          }
+          const wrapEl = document.getElementById("aiFillIconsCandidatesWrap");
+          if (!wrapEl) {
+            setIconsStatus("danger", "❌ 候选 UI 未初始化。");
+            return;
+          }
+          const selects = wrapEl.querySelectorAll("select[data-ai-icon-kind][data-ai-icon-name]");
+          if (!selects || !selects.length) {
+            setIconsStatus("danger", "❌ 没有可应用的选择。");
+            return;
+          }
+          const selCats = {};
+          const selLocs = {};
+          selects.forEach((sel) => {
+            const kind = sel.getAttribute("data-ai-icon-kind") || "";
+            const name = sel.getAttribute("data-ai-icon-name") || "";
+            const spec = sel.value || "";
+            if (!name || !spec) return;
+            if (kind === "category") selCats[name] = spec;
+            if (kind === "location") selLocs[name] = spec;
+          });
+
+          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+          setIconsButtonsDisabled(true);
+          setIconsStatus("info", "⏳ 正在回填…");
+
+          try {
+            const resp = await fetch("{{ url_for('admin.icons_missing_apply') }}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(token ? { "X-CSRFToken": token } : {}) },
+              body: JSON.stringify({ job_id: jobId, categories: selCats, locations: selLocs })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data || !data.ok) {
+              const msg = data?.error || data?.message || "回填失败";
+              setIconsStatus("danger", `❌ ${msg}`);
+              setIconsButtonsDisabled(false);
+              return;
+            }
+            const a = data.applied || {};
+            setIconsStatus("success", `✅ 回填完成：分类 ${a.categories ?? 0} / 位置 ${a.locations ?? 0}。正在刷新…`);
+            localStorage.removeItem(AI_ICON_JOB_STORAGE_KEY);
+            window.setTimeout(() => window.location.reload(), 900);
+          } catch (e) {
+            setIconsStatus("danger", "❌ 网络或服务异常（回填失败）");
+            setIconsButtonsDisabled(false);
+          }
+        }
+
+        // Suggest click
+        document.getElementById("btnAiFillMissingIconsSuggest")?.addEventListener("click", async () => {
+          await startAiIconSuggest();
+        });
+
+        // Apply click
+        document.getElementById("btnAiFillMissingIconsApply")?.addEventListener("click", async () => {
+          await applyAiIconSuggest();
+        });
+
+        // Resume if there is running/succeeded job stored
+        function resumeAiIconSuggest() {
+          const storedJobId = localStorage.getItem(AI_ICON_JOB_STORAGE_KEY) || "";
+          storedJobId && (aiIconSuggestJobId = storedJobId);
+          if (!storedJobId) return;
+
+          // Poll and let poll() decide whether it's running/success/error.
+          aiIconSuggestPollStartedAt = Date.now();
+          setIconsButtonsDisabled(true);
+          setIconsStatus("info", "⏳ 正在恢复候选生成进度…");
+          pollAiIconSuggestJob(storedJobId, aiIconSuggestPollStartedAt);
+        }
+
+        // visibilitychange resume (fix “切换页面/息屏再点亮状态丢失”)
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) return;
+          const storedJobId = localStorage.getItem(AI_ICON_JOB_STORAGE_KEY) || "";
+          if (!storedJobId) return;
+          // If polling already running, poll() will just update.
+          aiIconSuggestPollStartedAt = Date.now();
+          setIconsButtonsDisabled(true);
+          setIconsStatus("info", "⏳ 正在恢复候选生成进度…");
+          pollAiIconSuggestJob(storedJobId, aiIconSuggestPollStartedAt);
         });
 
         loadAiMissingIconsPreview();
+        resumeAiIconSuggest();
       })();
 
       // Tooltips (Bootstrap)

@@ -744,6 +744,93 @@
         clearBtnId: "aiPendingClearBtnPhoto",
       });
 
+      // ---------------------------
+      // AI job polling (fix: 切换页面/息屏再点亮丢进度)
+      // ---------------------------
+      const AI_PARSE_TEXT_JOB_KEY = "ai_parse_text_job_id";
+      const AI_RECOG_FOOD_JOB_KEY = "ai_recognize_food_job_id";
+      let aiParseJobRunning = false;
+      let aiRecogJobRunning = false;
+
+      function delay(ms) {
+        return new Promise((r) => window.setTimeout(r, ms));
+      }
+
+      function getAiModalEl() {
+        return document.getElementById("aiModal");
+      }
+
+      function updateAiModalText(titleText, descText) {
+        const el = getAiModalEl();
+        if (!el) return;
+        const titleEl = el.querySelector(".fw-semibold");
+        const descEl = el.querySelector(".text-muted.small");
+        if (titleEl) titleEl.textContent = String(titleText || "");
+        if (descEl) descEl.textContent = String(descText || "");
+      }
+
+      function showAiModal() {
+        const aiModalElLocal = getAiModalEl();
+        if (!aiModalElLocal) return null;
+        try {
+          return bootstrap.Modal.getOrCreateInstance(aiModalElLocal, { backdrop: "static", keyboard: false });
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function hideAiModal() {
+        const aiModalElLocal = getAiModalEl();
+        if (!aiModalElLocal) return;
+        try { bootstrap.Modal.getInstance(aiModalElLocal)?.hide(); } catch (e) {}
+        try { aiModalElLocal.classList.remove("show"); } catch (e) {}
+        try { aiModalElLocal.style.display = "none"; } catch (e) {}
+        try { aiModalElLocal.setAttribute("aria-hidden", "true"); } catch (e) {}
+        try { document.body.classList.remove("modal-open"); } catch (e) {}
+        try { document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove()); } catch (e) {}
+      }
+
+      async function pollAiJobResult(jobId, onRunning) {
+        const statusUrl = `/api/ai/jobs/${jobId}`;
+        const startAt = Date.now();
+        let attempt = 0;
+        for (;;) {
+          attempt += 1;
+          try {
+            const resp = await fetch(statusUrl, { method: "GET" });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data || !data.ok) {
+              // transient errors: keep polling
+              if (attempt < 8) {
+                await delay(1600);
+                continue;
+              }
+              throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : "AI job 查询失败");
+            }
+            if (data.status === "running") {
+              const waited = Math.max(0, Math.round((Date.now() - startAt) / 1000));
+              onRunning && onRunning(waited, attempt);
+              await delay(1800);
+              continue;
+            }
+            if (data.status === "success") {
+              return data.result;
+            }
+            if (data.status === "error") {
+              throw new Error(data.error || "AI job 失败");
+            }
+            await delay(1200);
+          } catch (e) {
+            // network errors: keep polling until job transitions
+            if (attempt < 10) {
+              await delay(2000);
+              continue;
+            }
+            throw e;
+          }
+        }
+      }
+
       // AI text
       const aiTextInput = document.getElementById("aiTextInput");
       const aiTextParseBtn = document.getElementById("aiTextParseBtn");
@@ -792,23 +879,43 @@
           const r = await fetch("/api/ai/parse-text", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
-            body: JSON.stringify({ text }),
+              body: JSON.stringify({ text, async: true }),
             signal: controller ? controller.signal : undefined,
           });
           const data = await r.json().catch(() => ({}));
           logAi(aiTextLogEl, `✅ 收到服务器响应（HTTP ${r.status}）`);
           if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "解析失败");
-          const arr = Array.isArray(data.data) ? data.data : [];
+
+            let arr = [];
+            if (data && data.async && data.job_id) {
+              const jobId = String(data.job_id || "").trim();
+              if (!jobId) throw new Error("AI job_id 为空，无法继续");
+              localStorage.setItem(AI_PARSE_TEXT_JOB_KEY, jobId);
+              aiParseJobRunning = true;
+              logAi(aiTextLogEl, "🕒 已创建后台任务，正在等待 AI 完成…");
+              arr = await pollAiJobResult(jobId, (waited) => {
+                updateAiModalText(`正在解析文本…（已等待 ${waited}s）`, "请稍候，识别结果会自动出现在下方待确认列表。");
+              });
+            } else {
+              arr = Array.isArray(data.data) ? data.data : [];
+            }
+
+            if (!Array.isArray(arr)) arr = [];
           const list = arr.map(normalizeAiItem).filter((x) => x.name);
           if (!list.length) {
             toast("未识别到物品，可手动新增", "warning");
             logAi(aiTextLogEl, "🤔 这次没有识别到任何物品，可以试试换种描述方式或直接手动新增。");
+              localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
             return;
           }
           aiTextPanel && aiTextPanel.setPending(list);
           toast(`成功识别到 ${list.length} 项`, "success");
           logAi(aiTextLogEl, `✨ 成功识别到 ${list.length} 项，已填入下方待确认列表。`);
+            localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
+            aiParseJobRunning = false;
         } catch (e) {
+            localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
+            aiParseJobRunning = false;
           if (e && e.name === "AbortError") {
             toast("AI 文本解析请求超时或已取消，请稍后重试。", "warning");
             logAi(aiTextLogEl, "⏱️ 文本解析请求超时或已取消，请稍后再试。");
@@ -862,23 +969,45 @@
             logAi(aiPhotoLogEl, "📷 已选择图片，准备发送到 AI 识别…");
             const fd = new FormData();
             fd.append("image", file);
-            const r = await fetch("/api/ai/recognize-food", { method: "POST", body: fd });
+              // async job: allow polling + resume after sleep/navigation
+              fd.append("async", "1");
+              const r = await fetch("/api/ai/recognize-food", { method: "POST", body: fd });
             const data = await r.json().catch(() => ({}));
             logAi(aiPhotoLogEl, `✅ 收到服务器响应（HTTP ${r.status}）`);
             if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "识别失败");
-            const arr = Array.isArray(data.data) ? data.data : [];
+              let arr = [];
+              if (data && data.async && data.job_id) {
+                const jobId = String(data.job_id || "").trim();
+                if (!jobId) throw new Error("AI job_id 为空，无法继续");
+                localStorage.setItem(AI_RECOG_FOOD_JOB_KEY, jobId);
+                aiRecogJobRunning = true;
+                logAi(aiPhotoLogEl, "🕒 已创建后台任务，正在等待 AI 完成…");
+                arr = await pollAiJobResult(jobId, (waited) => {
+                  updateAiModalText(`正在识别图片…（已等待 ${waited}s）`, "请稍候，识别结果会自动回填到表单。");
+                });
+              } else {
+                arr = Array.isArray(data.data) ? data.data : [];
+              }
+
+              if (!Array.isArray(arr)) arr = [];
             const list = arr.map(normalizeAiItem).filter((x) => x.name);
             if (!list.length) {
               toast("未识别到物品，可手动新增", "warning");
               logAi(aiPhotoLogEl, "🤔 这次图片里没有识别出明确的物品，可以试试换一张或者手动新增。");
+                localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
+                aiRecogJobRunning = false;
               return;
             }
             aiPhotoPanel && aiPhotoPanel.setPending(list);
             toast(`成功识别到 ${list.length} 项`, "success");
             logAi(aiPhotoLogEl, `✨ 成功识别到 ${list.length} 项，已填入下方待确认列表。`);
+              localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
+              aiRecogJobRunning = false;
           } catch (e) {
             toast((e && e.message) ? e.message : "AI 服务异常，请稍后重试", "danger");
             logAi(aiPhotoLogEl, `❌ 识别失败：${(e && e.message) ? e.message : "AI 服务异常"}`);
+              localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
+              aiRecogJobRunning = false;
           } finally {
             if (modalShowTimer) {
               try { window.clearTimeout(modalShowTimer); } catch (e) {}
@@ -898,6 +1027,73 @@
           }
         });
       }
+
+      // Resume pending AI jobs after navigation / visibility restore.
+      (async function resumeAiJobsIfAny() {
+        try {
+          // Text parse
+          const parseJobId = localStorage.getItem(AI_PARSE_TEXT_JOB_KEY) || "";
+          if (parseJobId && !aiParseJobRunning) {
+            aiParseJobRunning = true;
+            if (aiTextParseBtn) aiTextParseBtn.disabled = true;
+            updateAiModalText("正在解析文本…", "请稍候，识别结果会自动出现在下方待确认列表。");
+            const aiModalEl = getAiModalEl();
+            const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+            if (modal) modal.show();
+            logAi(aiTextLogEl, `🕒 恢复等待：文本解析 job_id=${parseJobId.slice(0, 10)}…`);
+            const result = await pollAiJobResult(parseJobId, (waited) => {
+              updateAiModalText(`正在解析文本…（已等待 ${waited}s）`, "请稍候，识别结果会自动出现在下方待确认列表。");
+            });
+            const arr = Array.isArray(result) ? result : [];
+            const list = arr.map(normalizeAiItem).filter((x) => x.name);
+            if (!list.length) {
+              toast("未识别到物品，可手动新增", "warning");
+            } else {
+              aiTextPanel && aiTextPanel.setPending(list);
+              toast(`成功识别到 ${list.length} 项`, "success");
+              logAi(aiTextLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+            }
+            localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
+            aiParseJobRunning = false;
+            hideAiModal();
+            if (aiTextParseBtn) aiTextParseBtn.disabled = false;
+          }
+
+          // Food recognize (photo)
+          const recogJobId = localStorage.getItem(AI_RECOG_FOOD_JOB_KEY) || "";
+          if (recogJobId && !aiRecogJobRunning) {
+            aiRecogJobRunning = true;
+            const aiInputLocal = document.getElementById("aiImageInput");
+            const aiModalEl = getAiModalEl();
+            updateAiModalText("正在识别图片…", "请稍候，识别结果会自动回填到表单。");
+            const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
+            if (modal) modal.show();
+            logAi(aiPhotoLogEl, `🕒 恢复等待：图片识别 job_id=${recogJobId.slice(0, 10)}…`);
+            const result = await pollAiJobResult(recogJobId, (waited) => {
+              updateAiModalText(`正在识别图片…（已等待 ${waited}s）`, "请稍候，识别结果会自动回填到表单。");
+            });
+            const arr = Array.isArray(result) ? result : [];
+            const list = arr.map(normalizeAiItem).filter((x) => x.name);
+            if (!list.length) {
+              toast("未识别到物品，可手动新增", "warning");
+              logAi(aiPhotoLogEl, "🤔 恢复识别：未识别到明确物品。");
+            } else {
+              aiPhotoPanel && aiPhotoPanel.setPending(list);
+              toast(`成功识别到 ${list.length} 项`, "success");
+              logAi(aiPhotoLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+            }
+            localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
+            aiRecogJobRunning = false;
+            if (aiInputLocal) aiInputLocal.value = "";
+            hideAiModal();
+          }
+        } catch (e) {
+          // If resume fails, don't block the page.
+          aiParseJobRunning = false;
+          aiRecogJobRunning = false;
+          hideAiModal();
+        }
+      })();
 
       // init
       renderAdded();

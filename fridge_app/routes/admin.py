@@ -30,7 +30,8 @@ from ..services.settings_service import (
 from ..models import AiModel
 from ..models import AiPromptTemplate
 from ..utils.auth import admin_required
-from ..utils.ai_text import generate_icon_candidates_for_names
+from ..utils.ai_text import generate_icon_candidates_for_names, PROMPT_ICON_SUGGEST
+from ..services.ai_job_service import ai_job_service
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -120,6 +121,9 @@ def admin_settings():
     engine_vision = _get_engine(_sel("ai_engine_vision_model_id"))
     engine_text = _get_engine(_sel("ai_engine_text_model_id"))
     engine_recipes = _get_engine(_sel("ai_engine_recipes_model_id"))
+    engine_icon_suggest = _get_engine(_sel("ai_engine_icon_suggest_model_id"))
+    # Prompt: editable in settings; fallback to built-in.
+    icon_suggest_prompt = (get_setting("ai_icon_suggest_prompt", "") or "").strip() or PROMPT_ICON_SUGGEST
     # (MVP) only keep abilities already used in app: vision/text/recipes
 
     return render_template(
@@ -168,6 +172,9 @@ def admin_settings():
         engine_vision=engine_vision,
         engine_text=engine_text,
         engine_recipes=engine_recipes,
+        engine_icon_suggest=engine_icon_suggest,
+        ai_engine_icon_suggest_id=_sel("ai_engine_icon_suggest_model_id"),
+        icon_suggest_prompt=icon_suggest_prompt,
     )
 
 
@@ -366,6 +373,173 @@ def icons_missing_generate():
     )
 
 
+def _calc_missing_icon_counts(*, cat_list: list[str], loc_list: list[str], cat_merged: dict[str, str], loc_merged: dict[str, str]) -> dict[str, int]:
+    missing_cats = _calc_missing_icon_keys(options=cat_list, merged_icon_map=cat_merged)
+    missing_locs = _calc_missing_icon_keys(options=loc_list, merged_icon_map=loc_merged)
+    return {
+        "categories_missing": len(missing_cats),
+        "locations_missing": len(missing_locs),
+        "total_missing": len(missing_cats) + len(missing_locs),
+    }
+
+
+def _compute_missing_icon_candidates(*, max_items: int, candidates_per_item: int) -> dict[str, Any]:
+    default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "其他"]
+    default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
+    cat_list = parse_option_list(get_setting("category_options", ""), default=default_categories)
+    loc_list = parse_option_list(get_setting("location_options", ""), default=default_locations)
+
+    cat_icon_custom = parse_json_object(get_setting("category_icon_map_json", ""), default={})
+    loc_icon_custom = parse_json_object(get_setting("location_icon_map_json", ""), default={})
+
+    cat_merged = dict(DEFAULT_CATEGORY_ICON_MAP)
+    cat_merged.update(cat_icon_custom)
+    loc_merged = dict(DEFAULT_LOCATION_ICON_MAP)
+    loc_merged.update(loc_icon_custom)
+
+    missing_counts = _calc_missing_icon_counts(
+        cat_list=cat_list,
+        loc_list=loc_list,
+        cat_merged=cat_merged,
+        loc_merged=loc_merged,
+    )
+
+    missing_cats = _calc_missing_icon_keys(options=cat_list, merged_icon_map=cat_merged)
+    missing_locs = _calc_missing_icon_keys(options=loc_list, merged_icon_map=loc_merged)
+
+    ordered: list[tuple[str, str]] = [("category", c) for c in missing_cats] + [("location", l) for l in missing_locs]
+    ordered = ordered[:max_items]
+
+    cats_to_gen = [k for kind, k in ordered if kind == "category"]
+    locs_to_gen = [k for kind, k in ordered if kind == "location"]
+
+    cat_suggest = generate_icon_candidates_for_names(cats_to_gen, kind="category", candidates_per_item=candidates_per_item) or {}
+    loc_suggest = generate_icon_candidates_for_names(locs_to_gen, kind="location", candidates_per_item=candidates_per_item) or {}
+
+    # Stable payload for UI:
+    # - always include keys we tried generating for (even if candidates empty)
+    cat_candidates = {name: (cat_suggest.get(name) or []) for name in cats_to_gen}
+    loc_candidates = {name: (loc_suggest.get(name) or []) for name in locs_to_gen}
+
+    return {
+        "counts": missing_counts,
+        "generated_requested": {"categories": len(cats_to_gen), "locations": len(locs_to_gen)},
+        "category_candidates": cat_candidates,
+        "location_candidates": loc_candidates,
+    }
+
+
+@bp.post("/icons/missing/suggest-async")
+@admin_required
+def icons_missing_suggest_async():
+    payload = request.get_json(silent=True) or {}
+    max_items = int(payload.get("max_items") or 20)
+    candidates_per_item = int(payload.get("candidates_per_item") or 3)
+    max_items = max(1, min(max_items, 80))
+    candidates_per_item = max(1, min(candidates_per_item, 5))
+
+    # Quick reject: no candidates -> return immediately.
+    def _fn() -> dict[str, Any]:
+        return _compute_missing_icon_candidates(max_items=max_items, candidates_per_item=candidates_per_item)
+
+    job_id = ai_job_service.create_job(
+        kind="icons_missing_candidates",
+        fn=_fn,
+        meta={"max_items": max_items, "candidates_per_item": candidates_per_item},
+        app=current_app._get_current_object(),
+    )
+    return jsonify({"ok": True, "async": True, "job_id": job_id})
+
+
+@bp.post("/icons/missing/apply")
+@admin_required
+def icons_missing_apply():
+    payload = request.get_json(silent=True) or {}
+    job_id = str(payload.get("job_id") or "").strip()
+    sel_categories = payload.get("categories") or {}
+    sel_locations = payload.get("locations") or {}
+    if not job_id:
+        return jsonify({"ok": False, "error": "job_id 不能为空"}), 400
+
+    job = ai_job_service.get_job(job_id)
+    if not job or job.status != "success":
+        return jsonify({"ok": False, "error": "job 未完成或已过期"}), 400
+
+    job_result = job.result if isinstance(job.result, dict) else {}
+    cat_candidates = job_result.get("category_candidates") if isinstance(job_result.get("category_candidates"), dict) else {}
+    loc_candidates = job_result.get("location_candidates") if isinstance(job_result.get("location_candidates"), dict) else {}
+
+    cat_icon_custom = parse_json_object(get_setting("category_icon_map_json", ""), default={})
+    loc_icon_custom = parse_json_object(get_setting("location_icon_map_json", ""), default={})
+
+    cat_merged = dict(DEFAULT_CATEGORY_ICON_MAP)
+    cat_merged.update(cat_icon_custom)
+    loc_merged = dict(DEFAULT_LOCATION_ICON_MAP)
+    loc_merged.update(loc_icon_custom)
+
+    applied_categories = 0
+    applied_locations = 0
+    skipped_categories = 0
+    skipped_locations = 0
+
+    def _apply_one(kind: str, name: str, chosen_spec: str) -> bool:
+        nonlocal applied_categories, applied_locations, skipped_categories, skipped_locations
+        if kind == "category":
+            merged = cat_merged
+            allowed = cat_candidates.get(name)
+        else:
+            merged = loc_merged
+            allowed = loc_candidates.get(name)
+
+        current_norm = normalize_icon_spec(merged.get(name))
+        if current_norm.get("type") != "none":
+            if kind == "category":
+                skipped_categories += 1
+            else:
+                skipped_locations += 1
+            return False
+
+        if not isinstance(chosen_spec, str):
+            return False
+        chosen_spec = chosen_spec.strip()
+        chosen_norm = normalize_icon_spec(chosen_spec)
+        if chosen_norm.get("type") == "none":
+            return False
+
+        # Guard: only allow chosen spec from AI candidates list.
+        if not isinstance(allowed, list) or not allowed:
+            return False
+        if chosen_spec not in allowed:
+            return False
+
+        merged[name] = chosen_spec
+        if kind == "category":
+            applied_categories += 1
+        else:
+            applied_locations += 1
+        return True
+
+    if isinstance(sel_categories, dict):
+        for k, v in sel_categories.items():
+            _apply_one("category", str(k), str(v or ""))
+    if isinstance(sel_locations, dict):
+        for k, v in sel_locations.items():
+            _apply_one("location", str(k), str(v or ""))
+
+    if applied_categories > 0:
+        set_setting("category_icon_map_json", dump_json_object(cat_merged))
+    if applied_locations > 0:
+        set_setting("location_icon_map_json", dump_json_object(loc_merged))
+
+    return jsonify(
+        {
+            "ok": True,
+            "applied": {"categories": applied_categories, "locations": applied_locations},
+            "skipped": {"categories": skipped_categories, "locations": skipped_locations},
+        }
+    )
+
+
 @bp.post("/settings/notify")
 @admin_required
 def settings_save_notify():
@@ -455,6 +629,8 @@ def settings_save_ai_engines():
     set_setting("ai_engine_vision_model_id", (request.form.get("ai_engine_vision_model_id") or "").strip())
     set_setting("ai_engine_text_model_id", (request.form.get("ai_engine_text_model_id") or "").strip())
     set_setting("ai_engine_recipes_model_id", (request.form.get("ai_engine_recipes_model_id") or "").strip())
+    set_setting("ai_engine_icon_suggest_model_id", (request.form.get("ai_engine_icon_suggest_model_id") or "").strip())
+    set_setting("ai_icon_suggest_prompt", (request.form.get("ai_icon_suggest_prompt") or "").strip())
     flash("能力引擎选择已保存。", "success")
     return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
 

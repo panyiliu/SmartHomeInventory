@@ -238,6 +238,22 @@ def text_extract_with_engine(user_text: str, *, prompt: str) -> Any:
     return extract_json(out_text) if out_text else body or {}
 
 
+def text_extract_icon_suggest_with_engine(user_text: str, *, prompt: str) -> Any:
+    """
+    Icon suggestion uses:
+    - primary: `ai_engine_icon_suggest_model_id` (editable)
+    - fallback: follow `ai_engine_text_model_id`
+    """
+
+    engine = _get_engine("ai_engine_icon_suggest_model_id") or _get_engine("ai_engine_text_model_id")
+    if not engine:
+        return None
+    if "{{user_text}}" not in (engine.request_template or ""):
+        return None
+    body, out_text = _call_engine(engine, mapping={"{{user_text}}": user_text, "{{prompt}}": prompt})
+    return extract_json(out_text) if out_text else body or {}
+
+
 def recipes_generate_with_engine(prompt: str, *, user_text: str = "") -> Any:
     engine = _get_engine("ai_engine_recipes_model_id")
     if not engine:
