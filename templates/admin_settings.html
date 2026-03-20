@@ -1151,7 +1151,11 @@
       }
 
       async function previewDup() {
-        const resp = await fetch("{{ url_for('admin.items_duplicates_preview') }}", { method: "POST" });
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+        const resp = await fetch("{{ url_for('admin.items_duplicates_preview') }}", {
+          method: "POST",
+          headers: token ? { "X-CSRFToken": token } : {},
+        });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data || !data.success) {
           showDupResultAlert("danger", `❌ 预览失败：${data.code || data.error || data.message || "未知错误"}`);
@@ -1171,7 +1175,11 @@
         const btn = document.getElementById("btnDupModalCleanup");
         if (btn) btn.disabled = true;
         try {
-          const resp = await fetch("{{ url_for('admin.items_duplicates_cleanup') }}", { method: "POST" });
+          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+          const resp = await fetch("{{ url_for('admin.items_duplicates_cleanup') }}", {
+            method: "POST",
+            headers: token ? { "X-CSRFToken": token } : {},
+          });
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok || !data || !data.success) {
             showDupResultAlert("danger", `❌ 清理失败：${data.code || data.error || data.message || "未知错误"}`);
@@ -1182,6 +1190,9 @@
           const after = data.after_total_actual ?? "-";
           showDupResultAlert("success", `✅ 清理完成：移入回收站 <b>${del}</b> 条；清理后活动总数 <b>${after}</b>（之前 <b>${before}</b>）。`);
           modal?.hide();
+          // Ensure user sees the effect immediately on the items list.
+          // Admin settings page itself isn't bound to item list, so we reload.
+          setTimeout(() => window.location.reload(), 400);
         } catch (e) {
           showDupResultAlert("danger", "❌ 清理失败（网络/服务异常）");
         } finally {

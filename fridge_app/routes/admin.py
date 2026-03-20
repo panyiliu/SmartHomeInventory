@@ -582,7 +582,23 @@ def items_import():
 
 
 def _duplicate_key(name: str, category: str, location: str) -> tuple[str, str, str]:
-    return ((name or "").strip(), (category or "").strip(), (location or "").strip())
+    """
+    Duplicate key normalization:
+    - category/location fallback to app defaults (avoid null/empty mismatch)
+    - unicode NFKC normalization to reduce "visually same but bytes different" issues
+    - collapse all whitespace
+    """
+    import unicodedata
+
+    def _norm(v: str | None, default: str) -> str:
+        s = (v or "").strip()
+        # NFKC: unify full/half-width & compatibility forms
+        s = unicodedata.normalize("NFKC", s)
+        # collapse whitespace
+        s = " ".join(s.split())
+        return s if s else default
+
+    return (_norm(name, ""), _norm(category, "其他"), _norm(location, "冰箱"))
 
 
 @bp.post("/items/duplicates/preview")
