@@ -189,6 +189,11 @@
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="text-muted">共 <span class="mono" id="invCount">{{ items|length }}</span> 项</div>
+        <button class="btn btn-sm btn-outline-secondary d-none d-md-inline-flex align-items-center"
+                type="button"
+                id="btnBatchToggleDesktop">
+          <i class="bi bi-check2-square me-1"></i><span id="batchToggleDesktopText">开启批量选择</span>
+        </button>
         <button class="d-none" type="button" id="btnBatchToggle" aria-hidden="true"></button>
         <span class="d-none" id="batchToggleText"></span>
       </div>
@@ -874,8 +879,10 @@
       const btnBatchUseUp = document.getElementById("btnBatchUseUp");
       const btnBatchDelete = document.getElementById("btnBatchDelete");
       const btnBatchToggle = document.getElementById("btnBatchToggle");
+      const btnBatchToggleDesktop = document.getElementById("btnBatchToggleDesktop");
       const btnBatchClose = document.getElementById("btnBatchClose");
       const batchToggleText = document.getElementById("batchToggleText");
+      const batchToggleDesktopText = document.getElementById("batchToggleDesktopText");
       let batchMode = false;
 
       function setBatchMode(on) {
@@ -898,6 +905,13 @@
         if (btnBatchToggle) {
           // In dropdown: keep it neutral, only update text.
           if (batchToggleText) batchToggleText.textContent = batchMode ? "关闭批量选择" : "开启批量选择";
+        }
+        if (batchToggleDesktopText) {
+          batchToggleDesktopText.textContent = batchMode ? "关闭批量选择" : "开启批量选择";
+        }
+        if (btnBatchToggleDesktop) {
+          btnBatchToggleDesktop.classList.toggle("btn-outline-secondary", !batchMode);
+          btnBatchToggleDesktop.classList.toggle("btn-primary", batchMode);
         }
       }
 
@@ -963,6 +977,9 @@
       if (btnBatchToggle) {
         btnBatchToggle.addEventListener("click", () => setBatchMode(!batchMode));
       }
+      if (btnBatchToggleDesktop) {
+        btnBatchToggleDesktop.addEventListener("click", () => setBatchMode(!batchMode));
+      }
       if (btnBatchClose) {
         btnBatchClose.addEventListener("click", () => setBatchMode(false));
       }
@@ -998,24 +1015,26 @@
           msg = `确定要将这 ${ids.length} 个物品移入回收站吗？`;
         }
         if (msg && !window.confirm(msg)) return;
-
-        const tasks = ids.map((id) => {
-          let url = "";
-          if (action === "useup") {
-            url = `/item/${id}/use-up`;
-          } else if (action === "delete") {
-            url = `/item/${id}/delete`;
-          }
-          if (!url) return Promise.resolve();
-          return fetch(url, {
-            method: "POST",
-            headers: { "X-Requested-With": "XMLHttpRequest" },
-          }).catch(() => {});
-        });
-
-        Promise.all(tasks).then(() => {
-          window.location.reload();
-        });
+        fetch("/items/batch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: JSON.stringify({ action, ids }),
+        })
+          .then((resp) => resp.json().catch(() => ({})))
+          .then((data) => {
+            if (!data || !data.ok) {
+              const msg = (data && data.error) ? data.error : "批量操作失败";
+              window.alert(msg);
+              return;
+            }
+            window.location.reload();
+          })
+          .catch(() => {
+            window.alert("批量操作失败（网络异常）");
+          });
       }
 
       if (btnBatchUseUp) {

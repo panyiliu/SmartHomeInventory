@@ -12,6 +12,7 @@ from .models import AiModel, AiPromptTemplate
 import json
 from .routes.admin import bp as admin_bp
 from .routes.api.admin import bp as admin_api_bp
+from .routes.api.backup import bp as backup_api_bp
 from .routes.auth import bp as auth_bp
 from .routes.api.items import bp as items_api_bp
 from .routes.main import bp as main_bp
@@ -553,6 +554,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_api_bp)
+    app.register_blueprint(backup_api_bp)
     app.register_blueprint(recipes_bp)
     app.register_blueprint(recipes_api_bp)
     app.register_blueprint(ai_models_bp)

@@ -467,25 +467,90 @@
               <hr class="my-4"/>
 
               <div class="mt-2">
-                <h6 class="mb-2">📦 库存数据备份（仅 Item）</h6>
+                <h6 class="mb-2">📦 库存数据备份（仅 Item，CSV 模板）</h6>
                 <div class="text-muted small mb-2">
-                  导出当前所有库存记录（包含“用完/回收站”项）为一个 JSON 文件，方便在本机/其他服务器做备份或迁移。
+                  导出当前所有库存记录（包含“用完/回收站”项）为一个 CSV 文件，方便在本机/其他服务器做备份或迁移。
                   导入时为<b>追加导入</b>，不会删除或覆盖现有数据。
                 </div>
                 <div class="d-flex flex-column flex-md-row gap-3 align-items-start">
                   <div>
                     <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin.items_export') }}">
-                      <i class="bi bi-download me-1"></i>导出库存 JSON 备份
+                      <i class="bi bi-download me-1"></i>导出库存 CSV 备份
                     </a>
                   </div>
                   <form method="post" action="{{ url_for('admin.items_import') }}" enctype="multipart/form-data" class="d-flex flex-column flex-md-row gap-2 align-items-start">
                     <div>
-                      <input class="form-control form-control-sm" type="file" name="items_file" accept="application/json,.json" />
+                      <input class="form-control form-control-sm" type="file" name="items_file" accept="text/csv,.csv,application/vnd.ms-excel" />
                     </div>
                     <button class="btn btn-primary btn-sm" type="submit">
-                      <i class="bi bi-upload me-1"></i>导入 JSON 备份（追加）
+                      <i class="bi bi-upload me-1"></i>导入 CSV 备份（追加）
                     </button>
                   </form>
+                </div>
+              </div>
+
+              <hr class="my-4"/>
+
+              <div class="mt-2">
+                <h6 class="mb-2">☁️ B2 云备份（CSV 单文件覆盖）</h6>
+                <div class="text-muted small mb-2">
+                  使用 <code>.env</code> 中的 B2 配置执行云备份：<code>POST /backup/check</code>、<code>/backup/manual</code>、<code>/backup/restore</code>。
+                  云端只保留一个对象（由 <code>BACKUP_TARGET_KEY</code> 指定），每次备份都会覆盖旧文件。
+                </div>
+                <form method="post" action="{{ url_for('admin.settings_save_backup_b2') }}" autocomplete="off" data-module-form="sec-data" class="mb-3">
+                  <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                      <label class="form-label mb-1">B2 Endpoint</label>
+                      <input class="form-control form-control-sm" type="text" name="backup_b2_endpoint" value="{{ backup_b2_endpoint }}" placeholder="https://s3.us-east-005.backblazeb2.com" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label mb-1">Bucket Name</label>
+                      <input class="form-control form-control-sm" type="text" name="backup_b2_bucket_name" value="{{ backup_b2_bucket_name }}" placeholder="SMARTHOME" />
+                    </div>
+                    <div class="col-12 col-md-4">
+                      <label class="form-label mb-1">Region</label>
+                      <input class="form-control form-control-sm" type="text" name="backup_b2_region" value="{{ backup_b2_region }}" placeholder="us-east-1" />
+                    </div>
+                    <div class="col-12 col-md-8">
+                      <label class="form-label mb-1">本地 CSV 路径</label>
+                      <input class="form-control form-control-sm mono" type="text" name="backup_source_path" value="{{ backup_source_path }}" placeholder="/app/instance/items-backup.csv" />
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label mb-1">云端对象名（固定覆盖）</label>
+                      <input class="form-control form-control-sm mono" type="text" name="backup_target_key" value="{{ backup_target_key }}" placeholder="latest_backup.csv" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label mb-1">Access Key ID</label>
+                      <div class="small text-muted mb-1">
+                        {% if b2_access_key_id_is_set %}已设置：{{ b2_access_key_id_tail }}（留空=不修改）{% else %}未设置{% endif %}
+                      </div>
+                      <input class="form-control form-control-sm" type="password" name="backup_b2_access_key_id" placeholder="输入新 Access Key ID（留空不修改）" autocomplete="new-password" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label mb-1">Application Key</label>
+                      <div class="small text-muted mb-1">
+                        {% if b2_application_key_is_set %}已设置：{{ b2_application_key_tail }}（留空=不修改）{% else %}未设置{% endif %}
+                      </div>
+                      <input class="form-control form-control-sm" type="password" name="backup_b2_application_key" placeholder="输入新 Application Key（留空不修改）" autocomplete="new-password" />
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <button class="btn btn-outline-secondary btn-sm" type="submit">
+                      <i class="bi bi-save me-1"></i>保存 B2 参数
+                    </button>
+                  </div>
+                </form>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="btnBackupCheck">
+                    <i class="bi bi-plug me-1"></i>测试连接
+                  </button>
+                  <button class="btn btn-primary btn-sm" type="button" id="btnBackupManual">
+                    <i class="bi bi-cloud-upload me-1"></i>立即备份
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm" type="button" id="btnBackupRestore">
+                    <i class="bi bi-cloud-download me-1"></i>立即恢复
+                  </button>
+                  <span class="small text-muted" id="backupActionResult">未执行</span>
                 </div>
               </div>
             </div>
@@ -830,6 +895,44 @@
 
       document.querySelectorAll("[data-engine-test]").forEach((btn) => {
         btn.addEventListener("click", () => testEngine(btn.getAttribute("data-engine-test")));
+      });
+
+      async function callBackupApi(url, actionName) {
+        const out = document.getElementById("backupActionResult");
+        if (!out) return;
+        out.textContent = `${actionName}中…`;
+        out.className = "small text-muted";
+        try {
+          const resp = await fetch(url, { method: "POST" });
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok && data && data.success) {
+            const extra = data.size_bytes ? ` (${data.size_bytes} bytes)` : "";
+            out.textContent = `✅ ${actionName}成功${extra}`;
+            out.className = "small text-success";
+            return;
+          }
+          const code = data.code || `HTTP_${resp.status}`;
+          const msg = data.message || "操作失败";
+          out.textContent = `❌ ${code}: ${msg}`;
+          out.className = "small text-danger";
+        } catch (e) {
+          out.textContent = "❌ 网络或服务异常";
+          out.className = "small text-danger";
+        }
+      }
+
+      document.getElementById("btnBackupCheck")?.addEventListener("click", () => {
+        callBackupApi("{{ url_for('backup_api.backup_check') }}", "连接测试");
+      });
+
+      document.getElementById("btnBackupManual")?.addEventListener("click", () => {
+        callBackupApi("{{ url_for('backup_api.backup_manual') }}", "云备份");
+      });
+
+      document.getElementById("btnBackupRestore")?.addEventListener("click", () => {
+        const ok = window.confirm("将从云端下载备份 CSV 并覆盖当前库存数据（清空并重建），确定继续？");
+        if (!ok) return;
+        callBackupApi("{{ url_for('backup_api.backup_restore') }}", "恢复");
       });
     })();
   </script>

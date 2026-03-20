@@ -14,6 +14,54 @@ from ...utils.auth import admin_required
 bp = Blueprint("items", __name__)
 
 
+@bp.post("/items/batch")
+def batch_action():
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action") or "").strip().lower()
+    raw_ids = payload.get("ids") or []
+    if action not in {"useup", "delete"}:
+        return jsonify({"ok": False, "error": "不支持的批量动作"}), 400
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return jsonify({"ok": False, "error": "ids 不能为空"}), 400
+
+    ids: list[int] = []
+    for x in raw_ids:
+        try:
+            v = int(str(x).strip())
+            if v > 0 and v not in ids:
+                ids.append(v)
+        except Exception:
+            continue
+    if not ids:
+        return jsonify({"ok": False, "error": "ids 不合法"}), 400
+
+    # Guardrail to avoid accidental huge payload abuse.
+    if len(ids) > 500:
+        return jsonify({"ok": False, "error": "单次批量最多 500 条"}), 400
+
+    now = datetime.utcnow()
+    q = Item.query.filter(Item.id.in_(ids), Item.deleted_at.is_(None))
+    if action == "useup":
+        updated = q.update(
+            {
+                Item.quantity: 0.0,
+                Item.used_up: True,
+                Item.updated_at: now,
+            },
+            synchronize_session=False,
+        )
+    else:  # delete
+        updated = q.update(
+            {
+                Item.deleted_at: now,
+                Item.updated_at: now,
+            },
+            synchronize_session=False,
+        )
+    db.session.commit()
+    return jsonify({"ok": True, "action": action, "requested": len(ids), "updated": int(updated or 0)})
+
+
 @bp.post("/item/<int:item_id>/mark-used-up")
 def mark_used_up_route(item_id: int):
     item = Item.query.get_or_404(item_id)

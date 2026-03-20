@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import io
+import csv
 from datetime import datetime
 from typing import Any
 
@@ -75,6 +77,8 @@ def admin_settings():
     ark_key_val = get_secret_setting(setting_key="volcengine_api_key", env_key="VOLCENGINE_API_KEY")
     smtp_pwd_val = get_secret_setting(setting_key="smtp_password", env_key="FRIDGE_SMTP_PASSWORD")
     barcode_secret_val = get_secret_setting(setting_key="barcode_app_secret", env_key="FRIDGE_BARCODE_APP_SECRET")
+    b2_access_key_id_val = get_secret_setting(setting_key="backup_b2_access_key_id", env_key="B2_ACCESS_KEY_ID")
+    b2_application_key_val = get_secret_setting(setting_key="backup_b2_application_key", env_key="B2_APPLICATION_KEY")
 
     email_history_count = EmailLog.query.count()
 
@@ -126,6 +130,15 @@ def admin_settings():
         barcode_app_id=get_setting("barcode_app_id", ""),
         barcode_secret_is_set=bool(barcode_secret_val),
         barcode_secret_tail=_mask_tail(barcode_secret_val, keep=4) if barcode_secret_val else "",
+        backup_b2_endpoint=(os.environ.get("B2_ENDPOINT") or get_setting("backup_b2_endpoint", "")).strip(),
+        backup_b2_bucket_name=(os.environ.get("B2_BUCKET_NAME") or get_setting("backup_b2_bucket_name", "")).strip(),
+        backup_b2_region=(os.environ.get("B2_REGION") or get_setting("backup_b2_region", "us-east-1")).strip() or "us-east-1",
+        backup_source_path=(os.environ.get("BACKUP_SOURCE_PATH") or get_setting("backup_source_path", "/app/instance/items-backup.csv")).strip() or "/app/instance/items-backup.csv",
+        backup_target_key=(os.environ.get("BACKUP_TARGET_KEY") or get_setting("backup_target_key", "latest_backup.csv")).strip() or "latest_backup.csv",
+        b2_access_key_id_is_set=bool(b2_access_key_id_val),
+        b2_access_key_id_tail=_mask_tail(b2_access_key_id_val, keep=4) if b2_access_key_id_val else "",
+        b2_application_key_is_set=bool(b2_application_key_val),
+        b2_application_key_tail=_mask_tail(b2_application_key_val, keep=4) if b2_application_key_val else "",
         category_options_json=dump_option_list(cat_list),
         location_options_json=dump_option_list(loc_list),
         category_icon_map_json=category_icon_map_json,
@@ -240,6 +253,26 @@ def settings_save_security():
     return redirect(url_for("admin.admin_settings", _anchor="sec-security"))
 
 
+@bp.post("/settings/backup-b2")
+@admin_required
+def settings_save_backup_b2():
+    set_setting("backup_b2_endpoint", (request.form.get("backup_b2_endpoint") or "").strip())
+    set_setting("backup_b2_bucket_name", (request.form.get("backup_b2_bucket_name") or "").strip())
+    set_setting("backup_b2_region", (request.form.get("backup_b2_region") or "us-east-1").strip() or "us-east-1")
+    set_setting("backup_source_path", (request.form.get("backup_source_path") or "").strip())
+    set_setting("backup_target_key", (request.form.get("backup_target_key") or "latest_backup.csv").strip() or "latest_backup.csv")
+
+    new_access_id = (request.form.get("backup_b2_access_key_id") or "").strip()
+    if new_access_id:
+        set_setting("backup_b2_access_key_id", new_access_id)
+    new_app_key = (request.form.get("backup_b2_application_key") or "").strip()
+    if new_app_key:
+        set_setting("backup_b2_application_key", new_app_key)
+
+    flash("B2 备份配置已保存。", "success")
+    return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+
 @bp.post("/settings/ai")
 @admin_required
 def settings_save_ai():
@@ -257,38 +290,54 @@ def settings_save_ai_engines():
     return redirect(url_for("admin.admin_settings", _anchor="sec-ai"))
 
 
-# Items backup/export (JSON)
+# Items backup/export (CSV)
 @bp.get("/items/export")
 @admin_required
 def items_export():
-    """导出所有库存 Item 为 JSON 备份文件（包含软删除/用完记录）。"""
+    """导出所有库存 Item 为 CSV 备份文件（包含软删除/用完记录）。"""
     items = Item.query.order_by(Item.created_at.asc(), Item.id.asc()).all()
 
-    def _item_to_dict(it: Item) -> dict[str, Any]:
-        return {
-            "name": (it.name or "").strip(),
-            "category": (it.category or "").strip(),
-            "quantity": float(it.quantity or 0.0),
-            "unit": (it.unit or "").strip(),
-            "location": (it.location or "").strip(),
-            "note": (it.note or "").strip(),
-            "barcode": (it.barcode or "").strip() if it.barcode else "",
-            "shelf_life_days": it.shelf_life_days,
-            "used_up": bool(it.used_up),
-            "created_at": it.created_at.isoformat() if it.created_at else None,
-            "updated_at": it.updated_at.isoformat() if it.updated_at else None,
-            "deleted_at": it.deleted_at.isoformat() if it.deleted_at else None,
-        }
+    headers = [
+        "name",
+        "category",
+        "quantity",
+        "unit",
+        "location",
+        "note",
+        "barcode",
+        "shelf_life_days",
+        "used_up",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+    ]
 
-    payload = {
-        "version": 1,
-        "exported_at": datetime.utcnow().isoformat() + "Z",
-        "items": [_item_to_dict(it) for it in items],
-    }
-    text = json.dumps(payload, ensure_ascii=False, indent=2)
-    filename = f"items-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=headers)
+    writer.writeheader()
+    for it in items:
+        writer.writerow(
+            {
+                "name": (it.name or "").strip(),
+                "category": (it.category or "").strip(),
+                "quantity": float(it.quantity or 0.0),
+                "unit": (it.unit or "").strip(),
+                "location": (it.location or "").strip(),
+                "note": (it.note or "").strip(),
+                "barcode": (it.barcode or "").strip() if it.barcode else "",
+                "shelf_life_days": it.shelf_life_days if it.shelf_life_days is not None else "",
+                "used_up": 1 if bool(it.used_up) else 0,
+                "created_at": it.created_at.isoformat() if it.created_at else "",
+                "updated_at": it.updated_at.isoformat() if it.updated_at else "",
+                "deleted_at": it.deleted_at.isoformat() if it.deleted_at else "",
+            }
+        )
 
-    resp = current_app.response_class(text, mimetype="application/json; charset=utf-8")
+    # Important: add UTF-8 BOM so Excel/WPS opens as UTF-8 (avoid mojibake).
+    csv_bytes = buf.getvalue().encode("utf-8-sig")
+    filename = f"items-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+
+    resp = current_app.response_class(csv_bytes, mimetype="text/csv; charset=utf-8")
     resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
@@ -297,86 +346,192 @@ def items_export():
 @admin_required
 def items_import():
     """
-    从 JSON 备份导入库存 Item。
+    从 CSV 备份导入库存 Item。
     仅做“追加导入”：不会删除或覆盖现有记录，适合灾备恢复或跨实例迁移。
     """
     f = request.files.get("items_file")
     if not f or not f.filename:
-        flash("请选择要导入的 JSON 备份文件。", "danger")
+        flash("请选择要导入的 CSV 备份文件。", "danger")
         return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
 
     try:
-        raw = f.read().decode("utf-8")
+        raw_bytes = f.read()
     except Exception:
         try:
-            raw = f.read().decode("utf-8", errors="ignore")
+            raw_bytes = f.read()
         except Exception:
             flash("导入失败：无法读取文件内容。", "danger")
             return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
 
     try:
-        data = json.loads(raw)
+        text = raw_bytes.decode("utf-8-sig")
     except Exception:
-        flash("导入失败：JSON 解析错误。", "danger")
+        try:
+            text = raw_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            flash("导入失败：无法解码 CSV 文件。", "danger")
+            return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+
+    # Backward compatibility: legacy JSON backups
+    trimmed = (text or "").lstrip()
+    if trimmed.startswith("{") or trimmed.startswith("["):
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                items_data = data.get("items")
+            else:
+                items_data = data
+
+            if isinstance(items_data, list):
+                imported = 0
+                now = datetime.utcnow()
+
+                def _parse_dt_json(v: Any) -> datetime | None:
+                    if not v:
+                        return None
+                    try:
+                        s = str(v).strip()
+                        if s.endswith("Z"):
+                            s = s[:-1]
+                        return datetime.fromisoformat(s)
+                    except Exception:
+                        return None
+
+                for obj in items_data:
+                    if not isinstance(obj, dict):
+                        continue
+                    name = str(obj.get("name") or "").strip()
+                    if not name:
+                        continue
+
+                    category = str(obj.get("category") or "其他").strip() or "其他"
+                    unit = str(obj.get("unit") or "份").strip() or "份"
+                    location = str(obj.get("location") or "冰箱").strip() or "冰箱"
+                    note = str(obj.get("note") or "").strip()
+                    barcode = str(obj.get("barcode") or "").strip() or None
+
+                    try:
+                        quantity = float(obj.get("quantity") or 0.0)
+                    except Exception:
+                        quantity = 0.0
+                    if quantity < 0:
+                        quantity = 0.0
+
+                    shelf_life_days = obj.get("shelf_life_days")
+                    try:
+                        shelf_life_days_int = (
+                            int(shelf_life_days)
+                            if shelf_life_days not in (None, "", "null")
+                            else None
+                        )
+                    except Exception:
+                        shelf_life_days_int = None
+
+                    used_up = bool(obj.get("used_up", False))
+                    created_at = _parse_dt_json(obj.get("created_at")) or now
+                    updated_at = _parse_dt_json(obj.get("updated_at")) or created_at
+                    deleted_at = _parse_dt_json(obj.get("deleted_at"))
+
+                    it = Item(
+                        name=name,
+                        category=category,
+                        quantity=quantity,
+                        unit=unit,
+                        location=location,
+                        note=note,
+                        barcode=barcode,
+                        shelf_life_days=shelf_life_days_int,
+                        used_up=used_up,
+                        deleted_at=deleted_at,
+                    )
+                    it.created_at = created_at
+                    it.updated_at = updated_at
+                    db.session.add(it)
+                    imported += 1
+
+                if imported > 0:
+                    db.session.commit()
+                    flash(f"已导入 {imported} 条库存记录（追加导入，未删除现有数据）。", "success")
+                else:
+                    flash("导入完成：未发现有效的库存记录。", "warning")
+                return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+        except Exception:
+            # Fall back to CSV parsing
+            pass
+
+    try:
+        sample = text[:2048]
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t"])
+        except Exception:
+            dialect = csv.excel
+        reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+    except Exception:
+        flash("导入失败：CSV 解析失败。", "danger")
         return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
 
-    # 兼容两种结构：纯列表 或 包含 items 字段的对象
-    if isinstance(data, dict):
-        items_data = data.get("items")
-    else:
-        items_data = data
+    def _parse_dt(v: Any) -> datetime | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            # best-effort: drop timezone info to keep SQLite happy
+            if s.endswith("Z"):
+                s = s[:-1]
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
 
-    if not isinstance(items_data, list):
-        flash("导入失败：JSON 结构不正确，应为 items 列表。", "danger")
-        return redirect(url_for("admin.admin_settings", _anchor="sec-data"))
+    def _parse_used_up(v: Any) -> bool:
+        s = str(v).strip().lower()
+        if s in {"1", "true", "yes", "y"}:
+            return True
+        return False
+
+    def _to_float(v: Any, default: float = 0.0) -> float:
+        try:
+            return float(str(v).strip())
+        except Exception:
+            return default
 
     imported = 0
     now = datetime.utcnow()
 
-    for obj in items_data:
-        if not isinstance(obj, dict):
+    for row in reader:
+        if not isinstance(row, dict):
             continue
-        name = str(obj.get("name") or "").strip()
+        name = str((row.get("name") or "")).strip()
         if not name:
             continue
 
-        category = str(obj.get("category") or "其他").strip() or "其他"
-        unit = str(obj.get("unit") or "份").strip() or "份"
-        location = str(obj.get("location") or "冰箱").strip() or "冰箱"
-        note = str(obj.get("note") or "").strip()
-        barcode = str(obj.get("barcode") or "").strip() or None
+        category = str((row.get("category") or "其他")).strip() or "其他"
+        unit = str((row.get("unit") or "份")).strip() or "份"
+        location = str((row.get("location") or "冰箱")).strip() or "冰箱"
+        note = str((row.get("note") or "")).strip()
+        barcode_raw = str((row.get("barcode") or "")).strip()
+        barcode = barcode_raw if barcode_raw else None
 
-        try:
-            quantity = float(obj.get("quantity") or 0.0)
-        except Exception:
-            quantity = 0.0
+        quantity = _to_float(row.get("quantity") or 0.0, default=0.0)
         if quantity < 0:
             quantity = 0.0
 
-        shelf_life_days = obj.get("shelf_life_days")
-        try:
-            shelf_life_days_int = int(shelf_life_days) if shelf_life_days not in (None, "", "null") else None
-        except Exception:
+        shelf_raw = row.get("shelf_life_days")
+        if shelf_raw is None:
             shelf_life_days_int = None
-
-        used_up = bool(obj.get("used_up", False))
-
-        def _parse_dt(v: Any) -> datetime | None:
-            if not v:
-                return None
+        else:
+            s = str(shelf_raw).strip()
             try:
-                s = str(v).strip()
-                # best-effort: drop timezone info to keep SQLite happy
-                if s.endswith("Z"):
-                    s = s[:-1]
-                # strip microseconds if present with 'Z' style
-                return datetime.fromisoformat(s)
+                shelf_life_days_int = int(s) if s and s != "null" else None
             except Exception:
-                return None
+                shelf_life_days_int = None
 
-        created_at = _parse_dt(obj.get("created_at")) or now
-        updated_at = _parse_dt(obj.get("updated_at")) or created_at
-        deleted_at = _parse_dt(obj.get("deleted_at"))
+        used_up = _parse_used_up(row.get("used_up"))
+
+        created_at = _parse_dt(row.get("created_at")) or now
+        updated_at = _parse_dt(row.get("updated_at")) or created_at
+        deleted_at = _parse_dt(row.get("deleted_at"))
 
         it = Item(
             name=name,
