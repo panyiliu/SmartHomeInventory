@@ -10,7 +10,7 @@ import requests
 
 
 from .prompt_templates import get_prompt_content
-from ..services.settings_service import get_category_options, get_location_options
+from ..services.settings_service import get_category_options, get_location_options, normalize_icon_spec
 from .ai_engine_runtime import text_extract_with_engine
 
 PROMPT_TEXT_TO_ITEMS = """
@@ -33,6 +33,117 @@ PROMPT_TEXT_TO_ITEMS = """
   {"name":"牛奶","number":1,"category":"饮品","location":"冰箱","status":"新购"}
 ]
 """.strip()
+
+
+PROMPT_ICON_SUGGEST = """
+你是家庭食材物品图标生成助手。
+你将收到输入 JSON，其中包含若干条“分类/位置名称”（用字符串表示）。
+你的任务：为每个名称生成最合适的图标候选（用于系统 icon spec）。
+
+【返回格式要求（非常重要）】
+1) 只返回严格 JSON 数组（list），不要输出任何额外文字、解释、Markdown；
+2) 每个元素为对象，字段必须包含且仅包含：
+   - name: 名称（string）
+   - icon_candidates: 图标候选数组（list[string]）
+3) icon_candidates 里每个候选必须是以下格式之一（严格遵守）：
+   - "emoji:<emoji>" 例如 "emoji:🥬"
+   - "bi:<bootstrap-icon-name>" 例如 "bi:box"
+4) icon_candidates 长度必须为候选数量 N（N 由输入给出）。
+   如果你无法给出足够候选，请重复最合适的那个候选以凑满 N。
+
+【约束】
+- 不要输出其它字段；
+- 保证 JSON 可被直接 json.loads() 解析。
+""".strip()
+
+
+def _stored_icon_spec_from_candidate(candidate: str) -> str:
+    """
+    Convert AI output to the stored icon spec string:
+    - emoji:<text>
+    - bi:<name>
+    - svg:<key>
+    - '' if invalid/empty
+    """
+    norm = normalize_icon_spec(candidate)
+    t = norm.get("type")
+    if t == "none":
+        return ""
+    if t == "emoji":
+        text = str(norm.get("text") or "").strip()
+        return f"emoji:{text}" if text else ""
+    if t == "bi":
+        name = str(norm.get("name") or "").strip()
+        return f"bi:{name}" if name else ""
+    if t == "svg":
+        key = str(norm.get("key") or "").strip()
+        return f"svg:{key}" if key else ""
+    return ""
+
+
+def generate_icon_candidates_for_names(
+    names: list[str],
+    *,
+    kind: str,
+    candidates_per_item: int = 3,
+) -> dict[str, list[str]]:
+    """
+    Use AI to generate icon candidates for missing category/location keys.
+    Returns: { "<name>": ["emoji:...", "bi:...", ...] } (each list length == candidates_per_item).
+    """
+    cleaned: list[str] = []
+    for n in names or []:
+        s = str(n or "").strip()
+        if s:
+            cleaned.append(s)
+    cleaned = cleaned[:50]
+
+    n = int(candidates_per_item or 3)
+    n = max(1, min(n, 5))
+
+    kind_norm = str(kind).strip().lower()
+    kind_label = "分类" if kind_norm in {"category", "cat"} else "位置"
+
+    # Note: we use a custom prompt; do NOT rely on the normal get_prompt_content injection.
+    user_text = json.dumps(
+        {"kind": kind_norm, "kind_label": kind_label, "items": cleaned, "candidates": n},
+        ensure_ascii=False,
+    )
+    engine_any = text_extract_with_engine(user_text, prompt=PROMPT_ICON_SUGGEST)
+    if engine_any is None:
+        return {}
+
+    items_any = engine_any if isinstance(engine_any, list) else (engine_any or [])
+    if not isinstance(items_any, list):
+        return {}
+
+    out: dict[str, list[str]] = {}
+    for obj in items_any:
+        if not isinstance(obj, dict):
+            continue
+        name = str(obj.get("name") or "").strip()
+        if not name:
+            continue
+        cands_any = obj.get("icon_candidates")
+        if not isinstance(cands_any, list):
+            continue
+
+        cands_normed: list[str] = []
+        for c in cands_any:
+            spec = _stored_icon_spec_from_candidate(str(c or "").strip())
+            if spec and spec not in cands_normed:
+                cands_normed.append(spec)
+            if len(cands_normed) >= n:
+                break
+        if not cands_normed:
+            continue
+
+        # Pad to exact length for stable client behavior.
+        while len(cands_normed) < n:
+            cands_normed.append(cands_normed[0])
+        out[name] = cands_normed[:n]
+
+    return out
 
 
 def _env_on(name: str, default: str = "1") -> bool:

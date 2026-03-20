@@ -464,6 +464,36 @@
                     </div>
                   </div>
 
+                  <!-- AI补全缺失图标 -->
+                  <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                          <h6 class="mb-0">AI补全缺失图标</h6>
+                          <div class="text-muted small" id="aiFillIconsMissingCount">—</div>
+                        </div>
+                        <div class="text-muted small mb-2">
+                          仅对当前“未配置图标”的分类/位置自动生成并回填；已有配置不会被覆盖。
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                          <label class="form-label mb-0 text-muted small">
+                            最多生成
+                            <input id="aiFillIconMaxItems" class="form-control form-control-sm mono d-inline-block ms-1" style="width:90px;" type="number" min="1" max="80" value="20" />
+                          </label>
+                          <label class="form-label mb-0 text-muted small">
+                            候选数量
+                            <input id="aiFillIconCandidatesPerItem" class="form-control form-control-sm mono d-inline-block ms-1" style="width:90px;" type="number" min="1" max="5" value="3" />
+                          </label>
+                          <button type="button" class="btn btn-outline-primary btn-sm" id="btnAiFillMissingIcons">
+                            <i class="bi bi-magic me-1"></i>AI生成并回填
+                          </button>
+                        </div>
+                        <div class="mt-2 small text-muted" id="aiFillIconsMissingList"></div>
+                        <div class="mt-2 alert alert-info p-2 mb-0 d-none" id="aiFillIconsResult" role="alert"></div>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- 移动端短标签快捷操作 -->
                   <div class="col-12">
                     <div class="card border-0 shadow-sm">
@@ -1795,6 +1825,95 @@
           updateRaw(raw, JSON.stringify({}));
           renderLocation?.();
         });
+
+        // AI 补全缺失图标
+        async function loadAiMissingIconsPreview() {
+          const countEl = document.getElementById("aiFillIconsMissingCount");
+          const listEl = document.getElementById("aiFillIconsMissingList");
+          if (!countEl || !listEl) return;
+          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+          countEl.textContent = "加载中…";
+          listEl.textContent = "";
+          try {
+            const resp = await fetch("{{ url_for('admin.icons_missing_preview') }}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(token ? { "X-CSRFToken": token } : {}) },
+              body: JSON.stringify({ limit: 50 })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data || !data.ok) {
+              countEl.textContent = "加载失败";
+              listEl.textContent = data.error || "获取缺失列表失败";
+              return;
+            }
+            const cMiss = data.counts?.categories_missing ?? 0;
+            const lMiss = data.counts?.locations_missing ?? 0;
+            const totalMiss = data.counts?.total_missing ?? (cMiss + lMiss);
+            countEl.textContent = `缺失 ${totalMiss}：分类 ${cMiss} / 位置 ${lMiss}`;
+            const cats = Array.isArray(data.missing_categories) ? data.missing_categories : [];
+            const locs = Array.isArray(data.missing_locations) ? data.missing_locations : [];
+            const catsText = cats.length ? `分类：${cats.join("，")}（最多显示 ${data.limit} 个）` : "分类：—";
+            const locsText = locs.length ? `位置：${locs.join("，")}（最多显示 ${data.limit} 个）` : "位置：—";
+            listEl.textContent = `${catsText}；${locsText}`;
+          } catch (e) {
+            countEl.textContent = "加载失败";
+            listEl.textContent = "网络或服务异常";
+          }
+        }
+
+        document.getElementById("btnAiFillMissingIcons")?.addEventListener("click", async () => {
+          const resultEl = document.getElementById("aiFillIconsResult");
+          const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+          if (resultEl) {
+            resultEl.classList.remove("d-none", "alert-danger", "alert-info", "alert-success");
+            resultEl.classList.add("alert-info");
+            resultEl.textContent = "AI 生成中…（可能需要几秒）";
+          }
+
+          const maxItemsRaw = document.getElementById("aiFillIconMaxItems")?.value;
+          const candsRaw = document.getElementById("aiFillIconCandidatesPerItem")?.value;
+          const maxItems = Math.max(1, parseInt(maxItemsRaw || "20", 10) || 20);
+          const candidatesPerItem = Math.max(1, parseInt(candsRaw || "3", 10) || 3);
+
+          const ok = window.confirm(`将对最多 ${maxItems} 个缺失条目自动生成并回填首选图标（每项候选 ${candidatesPerItem} 个）。确定继续？`);
+          if (!ok) return;
+
+          try {
+            const resp = await fetch("{{ url_for('admin.icons_missing_generate') }}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(token ? { "X-CSRFToken": token } : {}) },
+              body: JSON.stringify({ max_items: maxItems, candidates_per_item: candidatesPerItem })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data || !data.ok) {
+              const msg = data?.error || data?.message || "生成失败";
+              if (resultEl) {
+                resultEl.classList.remove("alert-info");
+                resultEl.classList.add("alert-danger");
+                resultEl.textContent = `❌ ${msg}`;
+              } else {
+                window.alert(`生成失败：${msg}`);
+              }
+              return;
+            }
+
+            if (resultEl) {
+              resultEl.classList.remove("alert-info");
+              resultEl.classList.add("alert-success");
+              const a = data.applied || {};
+              resultEl.textContent = `✅ 已回填：分类 ${a.categories ?? 0} / 位置 ${a.locations ?? 0}。正在刷新…`;
+            }
+            window.location.reload();
+          } catch (e) {
+            if (resultEl) {
+              resultEl.classList.remove("alert-info");
+              resultEl.classList.add("alert-danger");
+              resultEl.textContent = "❌ 网络或服务异常";
+            }
+          }
+        });
+
+        loadAiMissingIconsPreview();
       })();
 
       // Tooltips (Bootstrap)

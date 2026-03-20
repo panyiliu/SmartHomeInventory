@@ -7,7 +7,7 @@ import csv
 from datetime import datetime
 from typing import Any
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
+from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app, jsonify
 
 from ..extensions import db
 from ..models import EmailLog, Item
@@ -25,10 +25,12 @@ from ..services.settings_service import (
     DEFAULT_LOCATION_ICON_MAP,
     DEFAULT_CATEGORY_SHORT_LABEL_MAP,
     DEFAULT_LOCATION_SHORT_LABEL_MAP,
+    normalize_icon_spec,
 )
 from ..models import AiModel
 from ..models import AiPromptTemplate
 from ..utils.auth import admin_required
+from ..utils.ai_text import generate_icon_candidates_for_names
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -217,6 +219,151 @@ def settings_save_data():
         set_setting("location_label_map_json", loc_label_raw)
     flash("数据与选项已保存。", "success")
     return redirect(url_for("admin.admin_settings", _anchor="sec-data-manage"))
+
+
+def _calc_missing_icon_keys(*, options: list[str], merged_icon_map: dict[str, str]) -> list[str]:
+    missing: list[str] = []
+    for key in options or []:
+        k = str(key or "").strip()
+        if not k:
+            continue
+        norm = normalize_icon_spec(merged_icon_map.get(k))
+        if norm.get("type") == "none":
+            missing.append(k)
+    return missing
+
+
+@bp.post("/icons/missing/preview")
+@admin_required
+def icons_missing_preview():
+    payload = request.get_json(silent=True) or {}
+    limit = int(payload.get("limit") or 50)
+    limit = max(1, min(limit, 200))
+
+    default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "其他"]
+    default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
+    cat_list = parse_option_list(get_setting("category_options", ""), default=default_categories)
+    loc_list = parse_option_list(get_setting("location_options", ""), default=default_locations)
+
+    cat_icon_custom = parse_json_object(get_setting("category_icon_map_json", ""), default={})
+    loc_icon_custom = parse_json_object(get_setting("location_icon_map_json", ""), default={})
+
+    cat_merged = dict(DEFAULT_CATEGORY_ICON_MAP)
+    cat_merged.update(cat_icon_custom)
+    loc_merged = dict(DEFAULT_LOCATION_ICON_MAP)
+    loc_merged.update(loc_icon_custom)
+
+    missing_cats = _calc_missing_icon_keys(options=cat_list, merged_icon_map=cat_merged)
+    missing_locs = _calc_missing_icon_keys(options=loc_list, merged_icon_map=loc_merged)
+
+    total_cats = len(missing_cats)
+    total_locs = len(missing_locs)
+    cats = missing_cats[:limit]
+    locs = missing_locs[:limit]
+
+    return jsonify(
+        {
+            "ok": True,
+            "counts": {"categories_missing": total_cats, "locations_missing": total_locs, "total_missing": total_cats + total_locs},
+            "missing_categories": cats,
+            "missing_locations": locs,
+            "limit": limit,
+        }
+    )
+
+
+@bp.post("/icons/missing/generate")
+@admin_required
+def icons_missing_generate():
+    payload = request.get_json(silent=True) or {}
+    max_items = int(payload.get("max_items") or 20)
+    candidates_per_item = int(payload.get("candidates_per_item") or 3)
+    max_items = max(1, min(max_items, 80))
+    candidates_per_item = max(1, min(candidates_per_item, 5))
+
+    default_categories = ["蔬菜", "水果", "肉类", "海鲜", "蛋奶", "主食", "调料", "饮料", "零食", "其他"]
+    default_locations = ["冰箱", "冷藏", "冷冻", "常温", "橱柜", "厨房", "室外", "卫生间"]
+    cat_list = parse_option_list(get_setting("category_options", ""), default=default_categories)
+    loc_list = parse_option_list(get_setting("location_options", ""), default=default_locations)
+
+    cat_icon_custom = parse_json_object(get_setting("category_icon_map_json", ""), default={})
+    loc_icon_custom = parse_json_object(get_setting("location_icon_map_json", ""), default={})
+
+    cat_merged = dict(DEFAULT_CATEGORY_ICON_MAP)
+    cat_merged.update(cat_icon_custom)
+    loc_merged = dict(DEFAULT_LOCATION_ICON_MAP)
+    loc_merged.update(loc_icon_custom)
+
+    missing_cats = _calc_missing_icon_keys(options=cat_list, merged_icon_map=cat_merged)
+    missing_locs = _calc_missing_icon_keys(options=loc_list, merged_icon_map=loc_merged)
+
+    ordered: list[tuple[str, str]] = [("category", c) for c in missing_cats] + [("location", l) for l in missing_locs]
+    ordered = ordered[:max_items]
+
+    cats_to_gen = [k for kind, k in ordered if kind == "category"]
+    locs_to_gen = [k for kind, k in ordered if kind == "location"]
+
+    if not cats_to_gen and not locs_to_gen:
+        return jsonify({"ok": True, "message": "没有需要生成的缺失图标。", "applied": {"categories": 0, "locations": 0}})
+
+    applied_categories = 0
+    applied_locations = 0
+    missing_cat_suggest_keys: list[str] = []
+    missing_loc_suggest_keys: list[str] = []
+    cat_suggest: dict[str, list[str]] = {}
+    loc_suggest: dict[str, list[str]] = {}
+
+    if cats_to_gen:
+        cat_suggest = generate_icon_candidates_for_names(cats_to_gen, kind="category", candidates_per_item=candidates_per_item) or {}
+        if not cat_suggest:
+            missing_cat_suggest_keys = list(cats_to_gen)
+        for name in cats_to_gen:
+            cands = cat_suggest.get(name) or []
+            if not cands:
+                if name not in missing_cat_suggest_keys:
+                    missing_cat_suggest_keys.append(name)
+                continue
+            best = cands[0]
+            if best and best != cat_merged.get(name):
+                cat_merged[name] = best
+                applied_categories += 1
+            elif best:
+                applied_categories += 1  # treat as applied even if already set to same best
+
+    if locs_to_gen:
+        loc_suggest = generate_icon_candidates_for_names(locs_to_gen, kind="location", candidates_per_item=candidates_per_item) or {}
+        if not loc_suggest:
+            missing_loc_suggest_keys = list(locs_to_gen)
+        for name in locs_to_gen:
+            cands = loc_suggest.get(name) or []
+            if not cands:
+                if name not in missing_loc_suggest_keys:
+                    missing_loc_suggest_keys.append(name)
+                continue
+            best = cands[0]
+            if best and best != loc_merged.get(name):
+                loc_merged[name] = best
+                applied_locations += 1
+            elif best:
+                applied_locations += 1
+
+    if not (cat_suggest or loc_suggest):
+        return jsonify({"ok": False, "error": "AI 图标生成不可用（未配置文本引擎/引擎不可调用）"}), 400
+
+    # Persist only when we successfully apply at least one icon for that kind.
+    if applied_categories > 0:
+        set_setting("category_icon_map_json", dump_json_object(cat_merged))
+    if applied_locations > 0:
+        set_setting("location_icon_map_json", dump_json_object(loc_merged))
+
+    return jsonify(
+        {
+            "ok": True,
+            "applied": {"categories": applied_categories, "locations": applied_locations},
+            "generated_requested": {"categories": len(cats_to_gen), "locations": len(locs_to_gen)},
+            "ai_missing_keys": {"categories": missing_cat_suggest_keys, "locations": missing_loc_suggest_keys},
+        }
+    )
 
 
 @bp.post("/settings/notify")
