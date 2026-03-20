@@ -130,8 +130,36 @@
       let loading = false;
       let lastRecipes = [];
       let abortCtrl = null;
+      const AI_RECIPES_JOB_KEY = "ai_recipes_generate_job_id";
       let heartbeatTimer = null;
       let lastLogAt = 0;
+
+      function delay(ms) {
+        return new Promise((r) => window.setTimeout(r, ms));
+      }
+
+      async function pollAiJobResult(jobId, { signal } = {}) {
+        const statusUrl = `/api/ai/jobs/${jobId}`;
+        for (;;) {
+          const resp = await fetch(statusUrl, { method: "GET", signal });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data || !data.ok) {
+            await delay(2000);
+            continue;
+          }
+          if (data.status === "running") {
+            await delay(1800);
+            continue;
+          }
+          if (data.status === "success") {
+            return data.result;
+          }
+          if (data.status === "error") {
+            throw new Error(data.error || "AI job 失败");
+          }
+          await delay(1200);
+        }
+      }
 
       function setLoading(v) {
         loading = !!v;
@@ -253,7 +281,7 @@
         }
       }
 
-      async function fetchRecipes() {
+      async function fetchRecipes({ resumeJobId } = {}) {
         if (loading) return;
         clearState();
         clearLog();
@@ -272,26 +300,43 @@
         }, 1200);
         logStep("🧺 正在整理库存清单…");
         try {
-          logStep("📨 已发出请求，等待返回…");
-          const userText = (document.getElementById("recipeUserText")?.value || "").trim();
-          const res = await fetch("{{ url_for('recipes_api.api_generate') }}", {
-            method: "POST",
-            headers: { "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/json" },
-            body: JSON.stringify({ user_text: userText }),
-            signal: abortCtrl.signal,
-          });
-          logStep(`✅ 已收到服务器响应（HTTP ${res.status}）`);
-          const data = await res.json();
-          logStep("🧩 结果已解析，准备展示…");
-          if (!data.ok) {
-            errorTextEl.textContent = data.error || "AI 调用失败，请稍后重试。";
-            errorEl.classList.remove("d-none");
-            statusEl.textContent = "食谱推荐失败，可以稍后再试，或检查设置中的 AI 配置。";
-            logStep("❌ 生成失败：服务返回错误信息");
-            return;
+          let recipes = [];
+          let data = null;
+          if (resumeJobId) {
+            logStep("🕒 正在恢复上一次生成任务…");
+            recipes = await pollAiJobResult(resumeJobId, { signal: abortCtrl.signal });
+            localStorage.removeItem(AI_RECIPES_JOB_KEY);
+          } else {
+            logStep("📨 已发出请求，等待返回…");
+            const userText = (document.getElementById("recipeUserText")?.value || "").trim();
+            const res = await fetch("{{ url_for('recipes_api.api_generate') }}", {
+              method: "POST",
+              headers: { "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/json" },
+              body: JSON.stringify({ user_text: userText, async: true }),
+              signal: abortCtrl.signal,
+            });
+            logStep(`✅ 已收到服务器响应（HTTP ${res.status}）`);
+            data = await res.json();
+            logStep("🧩 结果已解析，准备等待任务完成…");
+            if (!data.ok || !data.async || !data.job_id) {
+              // Fallback to legacy sync response if server didn't support async
+              if (!data.ok) {
+                errorTextEl.textContent = data.error || "AI 调用失败，请稍后重试。";
+                errorEl.classList.remove("d-none");
+                statusEl.textContent = "食谱推荐失败，可以稍后再试，或检查设置中的 AI 配置。";
+                logStep("❌ 生成失败：服务返回错误信息");
+                return;
+              }
+              recipes = data.recipes || [];
+            } else {
+              const jobId = String(data.job_id || "").trim();
+              localStorage.setItem(AI_RECIPES_JOB_KEY, jobId);
+              recipes = await pollAiJobResult(jobId, { signal: abortCtrl.signal });
+              localStorage.removeItem(AI_RECIPES_JOB_KEY);
+            }
           }
-          const recipes = data.recipes || [];
-          if (recipes.length === 0 && data.reason === "no_ingredients") {
+
+          if (recipes.length === 0 && data && data.reason === "no_ingredients") {
             emptyEl.classList.remove("d-none");
             statusEl.textContent = "当前没有可用食材，请先新增一些食材。";
             btnRefresh.classList.add("d-none");
@@ -330,9 +375,9 @@
         }
       }
 
-      btnGen?.addEventListener("click", fetchRecipes);
-      btnRefresh?.addEventListener("click", fetchRecipes);
-      btnRetry?.addEventListener("click", fetchRecipes);
+      btnGen?.addEventListener("click", () => fetchRecipes());
+      btnRefresh?.addEventListener("click", () => fetchRecipes());
+      btnRetry?.addEventListener("click", () => fetchRecipes());
 
       // Cancel flow: confirm -> abort
       btnCancel?.addEventListener("click", () => {
@@ -345,7 +390,17 @@
           inst && inst.hide();
         }
         if (abortCtrl) abortCtrl.abort();
+        try { localStorage.removeItem(AI_RECIPES_JOB_KEY); } catch (e) {}
       });
+
+      // Resume last recipe generation job if it is still running.
+      (function resumeRecipesJobIfAny() {
+        try {
+          const jobId = localStorage.getItem(AI_RECIPES_JOB_KEY) || "";
+          if (!jobId) return;
+          if (!loading) fetchRecipes({ resumeJobId: jobId });
+        } catch (e) {}
+      })();
     })();
   </script>
 {% endblock %}
