@@ -386,80 +386,100 @@
 
               <form method="post" action="{{ url_for('admin.settings_save_data') }}" autocomplete="off" data-module-form="sec-data-manage">
                 <div class="row g-3">
+                  <!-- 分类管理 -->
                   <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类选项</label></div>
-                      <div class="col-12 col-md-8">
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                          <h6 class="mb-0">物品分类设置</h6>
+                          <span class="text-muted small">表格编辑：名称 / 短标签 / 图标</span>
+                        </div>
                         <input type="hidden" name="category_options" id="categoryOptionsRaw" value="{{ category_options_json }}" />
-                        <div class="border rounded-4 p-2 bg-white" data-tag-editor data-target="#categoryOptionsRaw">
-                          <div class="d-flex flex-wrap gap-2 align-items-center" data-tags></div>
-                          <div class="mt-2">
-                            <input class="form-control" data-tag-input placeholder="输入分类后回车添加（例：蔬菜）" />
-                          </div>
+                        <textarea id="categoryIconMapJsonRaw" class="form-control mono d-none" name="category_icon_map_json" rows="6">{{ category_icon_map_json }}</textarea>
+                        <textarea id="categoryLabelMapJsonRaw" class="form-control mono d-none" name="category_label_map_json" rows="5">{{ category_label_map_json }}</textarea>
+
+                        <div class="table-responsive">
+                          <table class="table table-sm table-bordered align-middle" id="categoryEditTable">
+                            <thead>
+                              <tr class="text-muted">
+                                <th style="width:44px;">排序</th>
+                                <th style="min-width:140px;">分类名称</th>
+                                <th style="width:180px;">短标签</th>
+                                <th style="width:140px;">图标类型</th>
+                                <th style="width:160px;">图标值</th>
+                                <th style="width:96px;">预览</th>
+                                <th style="width:96px;">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody></tbody>
+                          </table>
                         </div>
-                        <div class="form-text">将以“列表”形式保存（不是逗号拼接字符串）。</div>
+
+                        <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+                          <input id="categoryAddNameInput" class="form-control form-control-sm" placeholder="输入新分类名称后回车添加（例：蔬菜）" />
+                          <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAddCategory">
+                            <i class="bi bi-plus-circle me-1"></i>添加
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
+                  <!-- 位置管理 -->
                   <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置选项</label></div>
-                      <div class="col-12 col-md-8">
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                          <h6 class="mb-0">物品位置设置</h6>
+                          <span class="text-muted small">表格编辑：名称 / 短标签 / 图标</span>
+                        </div>
                         <input type="hidden" name="location_options" id="locationOptionsRaw" value="{{ location_options_json }}" />
-                        <div class="border rounded-4 p-2 bg-white" data-tag-editor data-target="#locationOptionsRaw">
-                          <div class="d-flex flex-wrap gap-2 align-items-center" data-tags></div>
-                          <div class="mt-2">
-                            <input class="form-control" data-tag-input placeholder="输入位置后回车添加（例：冰箱）" />
-                          </div>
+                        <textarea id="locationIconMapJsonRaw" class="form-control mono d-none" name="location_icon_map_json" rows="6">{{ location_icon_map_json }}</textarea>
+                        <textarea id="locationLabelMapJsonRaw" class="form-control mono d-none" name="location_label_map_json" rows="5">{{ location_label_map_json }}</textarea>
+
+                        <div class="table-responsive">
+                          <table class="table table-sm table-bordered align-middle" id="locationEditTable">
+                            <thead>
+                              <tr class="text-muted">
+                                <th style="width:44px;">排序</th>
+                                <th style="min-width:140px;">位置名称</th>
+                                <th style="width:180px;">短标签</th>
+                                <th style="width:140px;">图标类型</th>
+                                <th style="width:160px;">图标值</th>
+                                <th style="width:96px;">预览</th>
+                                <th style="width:96px;">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody></tbody>
+                          </table>
                         </div>
-                        <div class="form-text">前端录入会展示为下拉可选项。</div>
+
+                        <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+                          <input id="locationAddNameInput" class="form-control form-control-sm" placeholder="输入新位置名称后回车添加（例：铁皮柜）" />
+                          <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAddLocation">
+                            <i class="bi bi-plus-circle me-1"></i>添加
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
+                  <!-- 移动端短标签快捷操作 -->
                   <div class="col-12">
-                    <hr class="my-2"/>
-                    <div class="text-muted small">图标/短标签映射使用 JSON 对象：键为“分类/位置名称”，值为图标/短标签。</div>
-                    <div class="text-muted small mt-1">图标值支持：<code>emoji:🥬</code> / <code>bi:trash</code> / <code>svg:depleted</code>（也支持直接填 emoji）。</div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类图标映射</label></div>
-                      <div class="col-12 col-md-8">
-                        <textarea class="form-control mono" name="category_icon_map_json" rows="6">{{ category_icon_map_json }}</textarea>
-                        <div class="form-text">示例：<code>{"蔬菜":"emoji:🥬","水果":"emoji:🍎","零食":"bi:cookie"}</code></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置图标映射</label></div>
-                      <div class="col-12 col-md-8">
-                        <textarea class="form-control mono" name="location_icon_map_json" rows="6">{{ location_icon_map_json }}</textarea>
-                        <div class="form-text">示例：<code>{"冰箱":"emoji:🧊","橱柜":"emoji:🗄️"}</code></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">分类短标签（移动端）</label></div>
-                      <div class="col-12 col-md-8">
-                        <textarea class="form-control mono" name="category_label_map_json" rows="5">{{ category_label_map_json }}</textarea>
-                        <div class="form-text">示例：<code>{"蔬菜":"菜","水果":"果","肉类":"肉"}</code>；未配置则默认取首字。</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="row g-2 align-items-start">
-                      <div class="col-12 col-md-4"><label class="form-label mb-0">位置短标签（移动端）</label></div>
-                      <div class="col-12 col-md-8">
-                        <textarea class="form-control mono" name="location_label_map_json" rows="5">{{ location_label_map_json }}</textarea>
-                        <div class="form-text">可选；未配置则移动端仍显示完整位置文字。</div>
+                    <div class="card border-0 shadow-sm">
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                          <h6 class="mb-0">移动端短标签快捷操作</h6>
+                        </div>
+                        <div class="text-muted small mb-3">重置=清空覆盖映射：移动端会自动回退到“取名称首字”。</div>
+                        <div class="d-flex flex-wrap gap-2">
+                          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetCategoryLabels">
+                            重置分类短标签
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetLocationLabels">
+                            重置位置短标签
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -471,24 +491,27 @@
                 </div>
               </form>
 
-              <hr class="my-4"/>
-
-              <div class="mt-2">
-                <h6 class="mb-2">🧹 重复项清理（名称+分类+位置一致）</h6>
-                <div class="text-muted small mb-2">
-                  预览重复项数量；确认后会把每组重复中的“多余条目”移入回收站（soft delete）。
-                  这不会硬删除数据库记录。
+              <div class="mt-4">
+                <div class="card border-0 bg-light border border-danger-subtle">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                      <h6 class="mb-0 text-danger">⚠ 数据清理（危险区）</h6>
+                    </div>
+                    <div class="text-muted small mb-3">
+                      完全相同的数据将移入回收站（soft delete），不硬删除数据库记录。
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                      <button class="btn btn-outline-primary btn-sm" type="button" id="btnDupPreview">
+                        <i class="bi bi-eye me-1"></i>预览重复项
+                      </button>
+                      <button class="btn btn-outline-danger btn-sm" type="button" id="btnDupCleanup">
+                        <i class="bi bi-eraser me-1"></i>一键清理重复项
+                      </button>
+                      <div class="ms-2 alert alert-info p-2 mb-0 d-none" id="dupClearResult" role="alert"></div>
+                    </div>
+                    <div class="mt-2" id="dupClearDetails"></div>
+                  </div>
                 </div>
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                  <button class="btn btn-outline-primary btn-sm" type="button" id="btnDupPreview">
-                    <i class="bi bi-eye me-1"></i>预览重复项
-                  </button>
-                  <button class="btn btn-outline-danger btn-sm" type="button" id="btnDupCleanup">
-                    <i class="bi bi-eraser me-1"></i>一键清理重复项
-                  </button>
-                  <div class="ms-2 alert alert-info p-2 mb-0 d-none" id="dupClearResult" role="alert"></div>
-                </div>
-                <div class="mt-2" id="dupClearDetails"></div>
               </div>
 
               <!-- moved to sec-backup module -->
@@ -732,6 +755,33 @@
       z-index: 1030;
       padding: .75rem 0;
     }
+
+    /* Compact option tables */
+    #categoryEditTable th, #categoryEditTable td,
+    #locationEditTable th, #locationEditTable td {
+      padding-top: .35rem;
+      padding-bottom: .35rem;
+      vertical-align: middle;
+    }
+    #categoryEditTable input.form-control,
+    #locationEditTable input.form-control,
+    #categoryEditTable select.form-select,
+    #locationEditTable select.form-select {
+      padding-top: .15rem;
+      padding-bottom: .15rem;
+      height: auto;
+      min-height: 28px;
+    }
+
+    /* DnD visual feedback */
+    .admin-dnd-dragging{
+      opacity: .55;
+    }
+    .admin-dnd-drop-target{
+      outline: 2px dashed rgba(46,125,90,.75);
+      outline-offset: -2px;
+      background: rgba(46,125,90,.06);
+    }
   </style>
 
   <!-- 重复项清理：预览模态框 -->
@@ -928,6 +978,8 @@
         const input = root.querySelector("[data-tag-input]");
         if (!target || !tagsEl || !input) return;
 
+        let dragTag = null;
+
         function parseRaw(raw) {
           const s = String(raw || "").trim();
           if (!s) return [];
@@ -955,10 +1007,44 @@
           list.forEach((t) => {
             const chip = document.createElement("span");
             chip.className = "badge text-bg-light border d-inline-flex align-items-center gap-2 px-2 py-2";
+            chip.dataset.tag = t;
+            chip.draggable = true;
             chip.innerHTML = `<span>${t}</span><button type="button" class="btn btn-sm btn-link p-0 text-danger" aria-label="删除">×</button>`;
             chip.querySelector("button")?.addEventListener("click", () => {
               const next = parseRaw(target.value).filter((x) => x !== t);
               writeRaw(next);
+              render();
+              target.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+
+            chip.addEventListener("click", (e) => {
+              // Don't treat delete button click as selection.
+              if (e.target && String(e.target.tagName || "").toLowerCase() === "button") return;
+              document.dispatchEvent(new CustomEvent("tag-editor-selected", { detail: { targetId: target.id, value: t } }));
+            });
+
+            chip.addEventListener("dragstart", (e) => {
+              dragTag = t;
+              try { e.dataTransfer.effectAllowed = "move"; } catch (err) {}
+              try { e.dataTransfer.setData("text/plain", t); } catch (err) {}
+            });
+            chip.addEventListener("dragover", (e) => {
+              e.preventDefault();
+              try { e.dataTransfer.dropEffect = "move"; } catch (err) {}
+            });
+            chip.addEventListener("drop", (e) => {
+              e.preventDefault();
+              const from = (e.dataTransfer && (() => { try { return e.dataTransfer.getData("text/plain"); } catch (err) { return dragTag; } })()) || dragTag;
+              const to = t;
+              if (!from || from === to) return;
+              const cur = parseRaw(target.value);
+              const fromIdx = cur.indexOf(from);
+              const toIdx = cur.indexOf(to);
+              if (fromIdx < 0 || toIdx < 0) return;
+              const [item] = cur.splice(fromIdx, 1);
+              const newToIdx = cur.indexOf(to);
+              cur.splice(newToIdx, 0, item);
+              writeRaw(cur);
               render();
               target.dispatchEvent(new Event("change", { bubbles: true }));
             });
@@ -987,6 +1073,729 @@
         writeRaw(parseRaw(target.value));
         render();
       });
+
+      // Icon/label mapping editors (replace raw JSON text editing).
+      (function () {
+        const catOptsRawEl = document.getElementById("categoryOptionsRaw");
+        const locOptsRawEl = document.getElementById("locationOptionsRaw");
+
+        const catIconRawEl = document.getElementById("categoryIconMapJsonRaw");
+        const locIconRawEl = document.getElementById("locationIconMapJsonRaw");
+        const catLabelRawEl = document.getElementById("categoryLabelMapJsonRaw");
+        const locLabelRawEl = document.getElementById("locationLabelMapJsonRaw");
+
+        const catIconEditor = document.getElementById("categoryIconMapEditor");
+        const locIconEditor = document.getElementById("locationIconMapEditor");
+        const catLabelEditor = document.getElementById("categoryLabelMapEditor");
+        const locLabelEditor = document.getElementById("locationLabelMapEditor");
+
+        let selectedCategory = null;
+        let selectedLocation = null;
+
+        function syncSelectedChips() {
+          const catRoot = document.querySelector('[data-tag-editor][data-target="#categoryOptionsRaw"]');
+          const locRoot = document.querySelector('[data-tag-editor][data-target="#locationOptionsRaw"]');
+          const catChips = catRoot ? catRoot.querySelectorAll('[data-tags] [data-tag]') : [];
+          const locChips = locRoot ? locRoot.querySelectorAll('[data-tags] [data-tag]') : [];
+          catChips.forEach((chip) => {
+            const v = chip.getAttribute("data-tag");
+            chip.style.borderColor = (selectedCategory && v === selectedCategory) ? "var(--brand)" : "";
+          });
+          locChips.forEach((chip) => {
+            const v = chip.getAttribute("data-tag");
+            chip.style.borderColor = (selectedLocation && v === selectedLocation) ? "var(--brand)" : "";
+          });
+        }
+
+        document.addEventListener("tag-editor-selected", (e) => {
+          const d = e && e.detail ? e.detail : null;
+          if (!d || !d.targetId) return;
+          if (d.targetId === "categoryOptionsRaw") selectedCategory = d.value;
+          if (d.targetId === "locationOptionsRaw") selectedLocation = d.value;
+          syncSelectedChips();
+          rerenderAllEditors();
+        });
+
+        function parseJsonObject(raw, defaultObj) {
+          if (raw === undefined || raw === null) return defaultObj;
+          const s = String(raw).trim();
+          if (!s) return defaultObj;
+          try {
+            const obj = JSON.parse(s);
+            if (obj && typeof obj === "object" && !Array.isArray(obj)) return obj;
+          } catch (e) {}
+          return defaultObj;
+        }
+
+        function parseJsonArray(raw, defaultArr) {
+          if (raw === undefined || raw === null) return defaultArr;
+          const s = String(raw).trim();
+          if (!s) return defaultArr;
+          try {
+            const arr = JSON.parse(s);
+            if (Array.isArray(arr)) return arr.map((x) => String(x || "").trim()).filter(Boolean);
+          } catch (e) {}
+          return defaultArr;
+        }
+
+        function unionKeys(a, b) {
+          const set = new Set();
+          (a || []).forEach((x) => set.add(String(x)));
+          Object.keys(b || {}).forEach((k) => set.add(String(k)));
+          return Array.from(set).sort((x, y) => x.localeCompare(y, "zh-Hans-CN"));
+        }
+
+        function iconSpecToTypeValue(spec) {
+          const s = String(spec || "").trim();
+          if (!s) return { type: "none", value: "" };
+          if (s.startsWith("emoji:")) return { type: "emoji", value: s.slice("emoji:".length) };
+          if (s.startsWith("bi:")) return { type: "bi", value: s.slice("bi:".length) };
+          if (s.startsWith("svg:")) return { type: "svg", value: s.slice("svg:".length) };
+          return { type: "text", value: s };
+        }
+
+        function iconTypeValueToSpec(type, value) {
+          const v = String(value || "").trim();
+          if (type === "none") return "";
+          if (type === "emoji") return v ? `emoji:${v}` : "";
+          if (type === "bi") return v ? `bi:${v}` : "";
+          if (type === "svg") return v ? `svg:${v}` : "";
+          // text
+          return v || "";
+        }
+
+        function renderIconPreview(type, value) {
+          const v = String(value || "").trim();
+          if (type === "none") return `<span class="text-muted">—</span>`;
+          if (type === "emoji" || type === "text") return `<span style="font-size:1.05rem;">${v || " "}</span>`;
+          if (type === "bi") return `<i class="bi bi-${v}"></i>`;
+          if (type === "svg") {
+            if (v === "depleted") {
+              return `
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                  <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                </svg>`;
+            }
+            return `<span class="text-muted">svg:${v || ""}</span>`;
+          }
+          return `<span class="text-muted">—</span>`;
+        }
+
+        function updateRawTextarea(textareaEl, nextObj) {
+          if (!textareaEl) return;
+          const nextRaw = JSON.stringify(nextObj, null, 2);
+          textareaEl.value = nextRaw;
+          textareaEl.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+
+        function updateIconMapEditor({ editorEl, rawEl, optionKeys, filterKey, emptyText }) {
+          if (!editorEl || !rawEl) return;
+
+          const currentMap = parseJsonObject(rawEl.value, {});
+          const keys = unionKeys(optionKeys, currentMap);
+          if (!filterKey) {
+            editorEl.innerHTML = emptyText || `<div class="text-muted small">请选择左侧条目以编辑图标。</div>`;
+            return;
+          }
+          const keysToRender = keys.includes(filterKey) ? [filterKey] : [];
+          if (!keysToRender.length) {
+            editorEl.innerHTML = `<div class="text-muted small">当前选中的条目暂无图标映射（可继续配置）。</div>`;
+            return;
+          }
+
+          const types = [
+            { id: "emoji", label: "emoji" },
+            { id: "bi", label: "bi" },
+            { id: "svg", label: "svg" },
+            { id: "text", label: "纯文本" },
+            { id: "none", label: "无" },
+          ];
+
+          function ensureMapValue(key) {
+            if (Object.prototype.hasOwnProperty.call(currentMap, key)) return currentMap[key];
+            currentMap[key] = "";
+            return currentMap[key];
+          }
+
+          editorEl.innerHTML = `
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle">
+                <thead>
+                  <tr class="text-muted">
+                    <th style="min-width:120px;">名称</th>
+                    <th style="min-width:120px;">图标类型</th>
+                    <th style="min-width:180px;">图标值</th>
+                    <th style="width:90px;">预览</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          `;
+          const tbody = editorEl.querySelector("tbody");
+
+          keysToRender.forEach((key) => {
+            const spec = ensureMapValue(key);
+            const tv = iconSpecToTypeValue(spec);
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td class="fw-semibold">${key}</td>
+              <td>
+                <select class="form-select form-select-sm" data-icon-type="${key}">
+                  ${types.map((t) => `<option value="${t.id}" ${t.id === tv.type ? "selected" : ""}>${t.label}</option>`).join("")}
+                </select>
+              </td>
+              <td>
+                <input class="form-control form-control-sm" type="text" value="${String(tv.value || "").replace(/"/g, "&quot;")}"
+                  data-icon-value="${key}" ${tv.type === "none" ? "disabled" : ""} />
+              </td>
+              <td>
+                <div class="text-center text-muted" style="min-height:22px;" data-icon-preview="${key}">
+                  ${renderIconPreview(tv.type, tv.value)}
+                </div>
+              </td>
+            `;
+            tbody.appendChild(tr);
+
+            const typeSel = tr.querySelector(`[data-icon-type="${CSS.escape(key)}"]`);
+            const valInput = tr.querySelector(`[data-icon-value="${CSS.escape(key)}"]`);
+            const previewEl = tr.querySelector(`[data-icon-preview="${CSS.escape(key)}"]`);
+
+            function writeAndPreview() {
+              const nextType = typeSel.value;
+              const nextVal = valInput.value;
+              const specNext = iconTypeValueToSpec(nextType, nextVal);
+              currentMap[key] = specNext;
+              previewEl.innerHTML = renderIconPreview(nextType, nextVal);
+              updateRawTextarea(rawEl, currentMap);
+            }
+
+            typeSel.addEventListener("change", () => {
+              const nextType = typeSel.value;
+              if (nextType === "none") {
+                valInput.value = "";
+                valInput.disabled = true;
+              } else {
+                valInput.disabled = false;
+              }
+              writeAndPreview();
+            });
+
+            valInput.addEventListener("input", () => writeAndPreview());
+          });
+        }
+
+        function updateLabelMapEditor({ editorEl, rawEl, optionKeys, filterKey, emptyText }) {
+          if (!editorEl || !rawEl) return;
+          const currentMap = parseJsonObject(rawEl.value, {});
+          const keys = unionKeys(optionKeys, currentMap);
+          if (!filterKey) {
+            editorEl.innerHTML = emptyText || `<div class="text-muted small">请选择左侧条目以编辑移动端短标签。</div>`;
+            return;
+          }
+          const keysToRender = keys.includes(filterKey) ? [filterKey] : [];
+          if (!keysToRender.length) {
+            // Still render editor for missing keys: allow user to create mapping.
+            keysToRender.push(filterKey);
+          }
+          const autoLabel = (k) => {
+            const s = String(k || "");
+            return s ? s.slice(0, 1) : "";
+          };
+
+          // Init: if a key is missing in currentMap, we fill it with auto label.
+          // This keeps "auto generation" consistent with real runtime usage.
+          const prevRaw = String(rawEl.value || "");
+          const nextMapForInit = { ...currentMap };
+          keysToRender.forEach((key) => {
+            if (!(key in nextMapForInit)) nextMapForInit[key] = autoLabel(key);
+          });
+          const nextRaw = JSON.stringify(nextMapForInit, null, 2);
+          if (prevRaw !== nextRaw) {
+            // Keep currentMap in sync for rendering + mark dirty.
+            Object.assign(currentMap, nextMapForInit);
+            updateRawTextarea(rawEl, currentMap);
+          }
+
+          editorEl.innerHTML = `
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle">
+                <thead>
+                  <tr class="text-muted">
+                    <th style="min-width:120px;">名称</th>
+                    <th style="min-width:170px;">手动覆盖（锁定）</th>
+                    <th style="min-width:180px;">短标签</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="form-text mt-1">默认自动生成（取名称首字）。开启“手动覆盖”后可编辑并锁定该行。</div>
+          `;
+          const tbody = editorEl.querySelector("tbody");
+
+          keysToRender.forEach((key) => {
+            const tr = document.createElement("tr");
+            const suggested = autoLabel(key);
+            const existing = String(currentMap[key] ?? "").toString();
+            const locked = (key in currentMap) && (existing !== suggested);
+
+            tr.innerHTML = `
+              <td class="fw-semibold">${key}</td>
+              <td>
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" role="switch" ${locked ? "checked" : ""} data-lock="${key}">
+                </div>
+              </td>
+              <td>
+                <input class="form-control form-control-sm" type="text"
+                  value="${String(existing || "").replace(/"/g, "&quot;")}"
+                  data-label-key="${key}" ${locked ? "" : "disabled"} />
+              </td>
+            `;
+            tbody.appendChild(tr);
+
+            const lockChk = tr.querySelector(`[data-lock="${CSS.escape(key)}"]`);
+            const input = tr.querySelector(`[data-label-key="${CSS.escape(key)}"]`);
+
+            function setUnlocked() {
+              if (input) {
+                input.value = String(suggested || "");
+                input.disabled = true;
+              }
+              currentMap[key] = suggested;
+              updateRawTextarea(rawEl, currentMap);
+            }
+
+            function setLocked() {
+              if (input) input.disabled = false;
+              const next = input ? String(input.value || "").trim() : "";
+              if (!next) delete currentMap[key];
+              else currentMap[key] = next;
+              updateRawTextarea(rawEl, currentMap);
+            }
+
+            if (lockChk) {
+              lockChk.addEventListener("change", () => {
+                if (lockChk.checked) setLocked();
+                else setUnlocked();
+              });
+            }
+
+            input?.addEventListener("input", () => {
+              if (!lockChk || !lockChk.checked) return;
+              const next = String(input.value || "").trim();
+              if (!next) delete currentMap[key];
+              else currentMap[key] = next;
+              updateRawTextarea(rawEl, currentMap);
+            });
+          });
+        }
+
+        function rerenderAllEditors() {
+          const catOptions = parseJsonArray(catOptsRawEl?.value || "", []);
+          const locOptions = parseJsonArray(locOptsRawEl?.value || "", []);
+
+          if (selectedCategory && !catOptions.includes(selectedCategory)) selectedCategory = null;
+          if (selectedLocation && !locOptions.includes(selectedLocation)) selectedLocation = null;
+
+          syncSelectedChips();
+          updateIconMapEditor({
+            editorEl: catIconEditor,
+            rawEl: catIconRawEl,
+            optionKeys: catOptions,
+            filterKey: selectedCategory,
+            emptyText: `<div class="text-muted small">请选择左侧分类以编辑图标。</div>`,
+          });
+          updateIconMapEditor({
+            editorEl: locIconEditor,
+            rawEl: locIconRawEl,
+            optionKeys: locOptions,
+            filterKey: selectedLocation,
+            emptyText: `<div class="text-muted small">请选择左侧位置以编辑图标。</div>`,
+          });
+          updateLabelMapEditor({
+            editorEl: catLabelEditor,
+            rawEl: catLabelRawEl,
+            optionKeys: catOptions,
+            filterKey: selectedCategory,
+            emptyText: `<div class="text-muted small">请选择左侧分类以编辑移动端短标签。</div>`,
+          });
+          updateLabelMapEditor({
+            editorEl: locLabelEditor,
+            rawEl: locLabelRawEl,
+            optionKeys: locOptions,
+            filterKey: selectedLocation,
+            emptyText: `<div class="text-muted small">请选择左侧位置以编辑移动端短标签。</div>`,
+          });
+        }
+
+        // initial render
+        rerenderAllEditors();
+
+        document.getElementById("btnResetCategoryLabels")?.addEventListener("click", () => {
+          updateRawTextarea(catLabelRawEl, {});
+          rerenderAllEditors();
+        });
+
+        document.getElementById("btnResetLocationLabels")?.addEventListener("click", () => {
+          updateRawTextarea(locLabelRawEl, {});
+          rerenderAllEditors();
+        });
+
+        // re-render when options list changes
+        catOptsRawEl?.addEventListener("change", () => rerenderAllEditors());
+        locOptsRawEl?.addEventListener("change", () => rerenderAllEditors());
+      })();
+
+      // Category/Location table editors: inline editable name/short label/icon + drag sorting.
+      (function () {
+        function parseOptionList(raw) {
+          const s = String(raw || "").trim();
+          if (!s) return [];
+          try {
+            if (s.startsWith("[")) {
+              const arr = JSON.parse(s);
+              if (Array.isArray(arr)) return arr.map((x) => String(x || "").trim()).filter(Boolean);
+            }
+          } catch (e) {}
+          return s.split(",").map((x) => String(x || "").trim()).filter(Boolean);
+        }
+
+        function parseJsonObject(raw, def) {
+          if (raw === undefined || raw === null) return def;
+          const s = String(raw).trim();
+          if (!s) return def;
+          try {
+            const obj = JSON.parse(s);
+            if (obj && typeof obj === "object" && !Array.isArray(obj)) return obj;
+          } catch (e) {}
+          return def;
+        }
+
+        function autoLabel(name) {
+          const s = String(name || "").trim();
+          return s ? s.slice(0, 1) : "";
+        }
+
+        function iconSpecToTypeValue(spec) {
+          const s = String(spec || "").trim();
+          if (!s) return { type: "none", value: "" };
+          if (s.startsWith("emoji:")) return { type: "emoji", value: s.slice("emoji:".length) };
+          if (s.startsWith("bi:")) return { type: "bi", value: s.slice("bi:".length) };
+          if (s.startsWith("svg:")) return { type: "svg", value: s.slice("svg:".length) };
+          // plain text/emoji
+          return { type: "text", value: s };
+        }
+
+        function iconTypeValueToSpec(type, value) {
+          const v = String(value || "").trim();
+          if (type === "none") return "";
+          if (type === "emoji") return v ? `emoji:${v}` : "";
+          if (type === "bi") return v ? `bi:${v}` : "";
+          if (type === "svg") return v ? `svg:${v}` : "";
+          // text
+          return v || "";
+        }
+
+        function renderIconPreview(type, value) {
+          const v = String(value || "").trim();
+          if (type === "none") return `<span class="text-muted">—</span>`;
+          if (type === "emoji" || type === "text") return `<span style="font-size:1.05rem;">${v || " "}</span>`;
+          if (type === "bi") return `<i class="bi bi-${v}"></i>`;
+          if (type === "svg") {
+            if (v === "depleted") {
+              return `
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"></rect>
+                  <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+                </svg>`;
+            }
+            return `<span class="text-muted">svg:${v || ""}</span>`;
+          }
+          return `<span class="text-muted">—</span>`;
+        }
+
+        function updateRaw(el, nextRaw) {
+          if (!el) return;
+          el.value = nextRaw;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+
+        function setupTableEditor({
+          optionsRawEl,
+          iconMapRawEl,
+          labelMapRawEl,
+          tableEl,
+          addInputEl,
+          addBtnEl,
+        }) {
+          if (!optionsRawEl || !iconMapRawEl || !labelMapRawEl || !tableEl) return;
+          const tbody = tableEl.querySelector("tbody");
+          if (!tbody) return;
+
+          function getState() {
+            return {
+              options: parseOptionList(optionsRawEl.value),
+              iconMap: parseJsonObject(iconMapRawEl.value, {}),
+              labelMap: parseJsonObject(labelMapRawEl.value, {}),
+            };
+          }
+
+          let draggingKey = null;
+          let draggingTr = null;
+          let dndWired = false;
+
+          function render() {
+            const state = getState();
+            tbody.innerHTML = "";
+
+            if (!dndWired) {
+              // Dynamic reorder on dragover (real-time "rows move" effect).
+              tbody.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                if (!draggingTr) return;
+                const overTr = e.target && e.target.closest ? e.target.closest("tr") : null;
+                if (!overTr || overTr === draggingTr) return;
+                try {
+                  tbody.querySelectorAll("tr.admin-dnd-drop-target").forEach((x) => x.classList.remove("admin-dnd-drop-target"));
+                } catch (err) {}
+                overTr.classList.add("admin-dnd-drop-target");
+                const r = overTr.getBoundingClientRect();
+                const before = e.clientY < (r.top + r.height / 2);
+                // If already in desired position, do nothing.
+                if (before) {
+                  if (draggingTr.previousElementSibling !== overTr) tbody.insertBefore(draggingTr, overTr);
+                } else {
+                  if (draggingTr.nextElementSibling !== overTr) tbody.insertBefore(draggingTr, overTr.nextSibling);
+                }
+              });
+
+              tbody.addEventListener("drop", (e) => {
+                e.preventDefault();
+                if (!draggingTr) return;
+                const domKeys = Array.from(tbody.querySelectorAll("tr[data-key]")).map((tr) => tr.dataset.key);
+                const state2 = getState();
+                state2.options = domKeys.filter((k) => k && state2.options.includes(k));
+                updateRaw(optionsRawEl, JSON.stringify(state2.options));
+                try {
+                  tbody.querySelectorAll("tr.admin-dnd-drop-target").forEach((x) => x.classList.remove("admin-dnd-drop-target"));
+                } catch (err) {}
+                draggingTr?.classList.remove("admin-dnd-dragging");
+                draggingTr = null;
+                draggingKey = null;
+                render();
+              });
+
+              dndWired = true;
+            }
+
+            state.options.forEach((key, idx) => {
+              const tr = document.createElement("tr");
+              tr.dataset.key = key;
+              tr.draggable = false;
+
+              const labelVal = (key in state.labelMap) ? String(state.labelMap[key] ?? "") : autoLabel(key);
+              const spec = state.iconMap[key];
+              const tv = iconSpecToTypeValue(spec);
+
+              tr.innerHTML = `
+                <td style="width:44px;">
+                  <span class="text-muted" style="cursor:grab;" draggable="true" data-drag-handle="1" title="拖拽排序">
+                    <i class="bi bi-grip-vertical"></i>
+                  </span>
+                </td>
+                <td style="min-width:140px;">
+                  <input class="form-control form-control-sm" type="text" value="${String(key).replace(/"/g, "&quot;")}" data-role="name" />
+                </td>
+                <td style="width:180px;">
+                  <input class="form-control form-control-sm" type="text" value="${String(labelVal).replace(/"/g, "&quot;")}" data-role="label" />
+                </td>
+                <td style="width:140px;">
+                  <select class="form-select form-select-sm" data-role="icon-type">
+                    <option value="emoji" ${tv.type === "emoji" ? "selected" : ""}>emoji</option>
+                    <option value="bi" ${tv.type === "bi" ? "selected" : ""}>bi</option>
+                    <option value="svg" ${tv.type === "svg" ? "selected" : ""}>svg</option>
+                    <option value="text" ${tv.type === "text" ? "selected" : ""}>纯文本</option>
+                    <option value="none" ${tv.type === "none" ? "selected" : ""}>无</option>
+                  </select>
+                </td>
+                <td style="width:160px;">
+                  <input class="form-control form-control-sm" type="text" value="${String(tv.value || "").replace(/"/g, "&quot;")}" data-role="icon-value" ${tv.type === "none" ? "disabled" : ""} />
+                </td>
+                <td style="width:96px;">
+                  <div class="text-center text-muted" data-role="icon-preview">
+                    ${renderIconPreview(tv.type, tv.value)}
+                  </div>
+                </td>
+                <td style="width:96px;">
+                  <button type="button" class="btn btn-sm btn-outline-danger" data-role="delete">
+                    删除
+                  </button>
+                </td>
+              `;
+              tbody.appendChild(tr);
+
+              const nameInput = tr.querySelector('[data-role="name"]');
+              const labelInput = tr.querySelector('[data-role="label"]');
+              const typeSel = tr.querySelector('[data-role="icon-type"]');
+              const valInput = tr.querySelector('[data-role="icon-value"]');
+              const previewEl = tr.querySelector('[data-role="icon-preview"]');
+              const deleteBtn = tr.querySelector('[data-role="delete"]');
+              const dragHandle = tr.querySelector('[data-drag-handle="1"]');
+
+              function currentKey() { return tr.dataset.key; }
+
+              function refreshPreview() {
+                const specNext = iconTypeValueToSpec(typeSel.value, valInput.value);
+                previewEl.innerHTML = renderIconPreview(typeSel.value, valInput.value);
+                // Update map immediately
+                const state2 = getState();
+                const key2 = currentKey();
+                if (!specNext) delete state2.iconMap[key2];
+                else state2.iconMap[key2] = specNext;
+                updateRaw(iconMapRawEl, JSON.stringify(state2.iconMap));
+              }
+
+              typeSel.addEventListener("change", () => {
+                if (typeSel.value === "none") valInput.disabled = true;
+                else valInput.disabled = false;
+                refreshPreview();
+              });
+              valInput.addEventListener("input", () => {
+                refreshPreview();
+              });
+
+              labelInput.addEventListener("input", () => {
+                const state2 = getState();
+                const key2 = currentKey();
+                const next = String(labelInput.value || "").trim();
+                if (!next) delete state2.labelMap[key2];
+                else state2.labelMap[key2] = next;
+                updateRaw(labelMapRawEl, JSON.stringify(state2.labelMap));
+              });
+
+              nameInput.addEventListener("blur", () => {
+                const oldKey = currentKey();
+                const nextKey = String(nameInput.value || "").trim();
+                if (!nextKey || nextKey === oldKey) return;
+                const state2 = getState();
+                if (state2.options.includes(nextKey) && nextKey !== oldKey) {
+                  window.alert(`已存在同名条目：${nextKey}`);
+                  nameInput.value = oldKey;
+                  return;
+                }
+
+                // Move in options
+                const i = state2.options.indexOf(oldKey);
+                if (i >= 0) state2.options.splice(i, 1, nextKey);
+
+                // Move in maps
+                if (oldKey in state2.iconMap) {
+                  state2.iconMap[nextKey] = state2.iconMap[oldKey];
+                  delete state2.iconMap[oldKey];
+                }
+                if (oldKey in state2.labelMap) {
+                  state2.labelMap[nextKey] = state2.labelMap[oldKey];
+                  delete state2.labelMap[oldKey];
+                }
+
+                // Persist
+                updateRaw(optionsRawEl, JSON.stringify(state2.options));
+                updateRaw(iconMapRawEl, JSON.stringify(state2.iconMap));
+                updateRaw(labelMapRawEl, JSON.stringify(state2.labelMap));
+                render(); // rebind events and update dataset key
+              });
+
+              deleteBtn.addEventListener("click", () => {
+                const key2 = currentKey();
+                const state2 = getState();
+                state2.options = state2.options.filter((x) => x !== key2);
+                delete state2.iconMap[key2];
+                delete state2.labelMap[key2];
+                updateRaw(optionsRawEl, JSON.stringify(state2.options));
+                updateRaw(iconMapRawEl, JSON.stringify(state2.iconMap));
+                updateRaw(labelMapRawEl, JSON.stringify(state2.labelMap));
+                render();
+              });
+
+              // Drag reorder
+              dragHandle?.addEventListener("dragstart", (e) => {
+                draggingKey = currentKey();
+                draggingTr = tr;
+                tr.classList.add("admin-dnd-dragging");
+                try { e.dataTransfer.setData("text/plain", draggingKey); } catch (err) {}
+                try { e.dataTransfer.effectAllowed = "move"; } catch (err) {}
+              });
+
+              dragHandle?.addEventListener("dragend", () => {
+                try { tr.classList.remove("admin-dnd-dragging"); } catch (err) {}
+                if (draggingTr === tr) draggingTr = null;
+                draggingKey = null;
+              });
+            });
+          }
+
+          // Add new row
+          function addOne() {
+            const state2 = getState();
+            const next = String(addInputEl.value || "").trim();
+            if (!next) return;
+            if (state2.options.includes(next)) {
+              window.alert(`已存在同名条目：${next}`);
+              return;
+            }
+            state2.options.push(next);
+            updateRaw(optionsRawEl, JSON.stringify(state2.options));
+            addInputEl.value = "";
+            render();
+          }
+
+          if (addBtnEl) addBtnEl.addEventListener("click", () => addOne());
+          if (addInputEl) addInputEl.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            addOne();
+          });
+
+          render();
+          return render;
+        }
+
+        const renderCategory = setupTableEditor({
+          optionsRawEl: document.getElementById("categoryOptionsRaw"),
+          iconMapRawEl: document.getElementById("categoryIconMapJsonRaw"),
+          labelMapRawEl: document.getElementById("categoryLabelMapJsonRaw"),
+          tableEl: document.getElementById("categoryEditTable"),
+          addInputEl: document.getElementById("categoryAddNameInput"),
+          addBtnEl: document.getElementById("btnAddCategory"),
+        });
+
+        const renderLocation = setupTableEditor({
+          optionsRawEl: document.getElementById("locationOptionsRaw"),
+          iconMapRawEl: document.getElementById("locationIconMapJsonRaw"),
+          labelMapRawEl: document.getElementById("locationLabelMapJsonRaw"),
+          tableEl: document.getElementById("locationEditTable"),
+          addInputEl: document.getElementById("locationAddNameInput"),
+          addBtnEl: document.getElementById("btnAddLocation"),
+        });
+
+        // Reset mobile label overrides = clear maps
+        document.getElementById("btnResetCategoryLabels")?.addEventListener("click", () => {
+          const raw = document.getElementById("categoryLabelMapJsonRaw");
+          if (!raw) return;
+          updateRaw(raw, JSON.stringify({}));
+          renderCategory?.();
+        });
+        document.getElementById("btnResetLocationLabels")?.addEventListener("click", () => {
+          const raw = document.getElementById("locationLabelMapJsonRaw");
+          if (!raw) return;
+          updateRaw(raw, JSON.stringify({}));
+          renderLocation?.();
+        });
+      })();
 
       // Tooltips (Bootstrap)
       if (window.bootstrap && bootstrap.Tooltip) {
@@ -1152,26 +1961,68 @@
 
       async function previewDup() {
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
-        const resp = await fetch("{{ url_for('admin.items_duplicates_preview') }}", {
-          method: "POST",
-          headers: token ? { "X-CSRFToken": token } : {},
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || !data || !data.success) {
-          showDupResultAlert("danger", `❌ 预览失败：${data.code || data.error || data.message || "未知错误"}`);
-          renderDupPreviewModal(null);
-          return;
-        }
-
-        renderDupPreviewModal(data);
+        const btn = document.getElementById("btnDupPreview");
+        const summaryEl = document.getElementById("dupPreviewSummary");
+        const tbodyEl = document.getElementById("dupPreviewTbody");
         const modalEl = document.getElementById("dupPreviewModal");
         const modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+
+        if (btn) btn.disabled = true;
+
+        // Immediate visual feedback: avoid "empty table" confusion.
+        if (summaryEl) summaryEl.textContent = "正在加载预览（如刚导入数据，可能需要等待同步…）";
+        if (tbodyEl) tbodyEl.innerHTML = "";
         modal?.show();
+
+        const url = "{{ url_for('admin.items_duplicates_preview') }}";
+        const maxAttempts = 4;
+        const baseDelayMs = 650;
+
+        try {
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const resp = await fetch(url, {
+              method: "POST",
+              headers: token ? { "X-CSRFToken": token } : {},
+            });
+            const data = await resp.json().catch(() => ({}));
+
+            if (!resp.ok || !data || !data.success) {
+              showDupResultAlert("danger", `❌ 预览失败：${data.code || data.error || data.message || "未知错误"}`);
+              renderDupPreviewModal(null);
+              return;
+            }
+
+            const groups = Array.isArray(data.dup_groups) ? data.dup_groups : [];
+            const beforeTotal = typeof data.before_total === "number" ? data.before_total : null;
+
+            // If we still get empty groups shortly after an import, retry a few times.
+            const shouldRetry = groups.length === 0 && beforeTotal !== null && beforeTotal > 0 && attempt < maxAttempts;
+            if (!shouldRetry) {
+              renderDupPreviewModal(data);
+              modal?.show();
+              return;
+            }
+
+            if (summaryEl) {
+              summaryEl.textContent = `正在同步预览…（${attempt}/${maxAttempts}）`;
+            }
+            await new Promise((r) => setTimeout(r, baseDelayMs * attempt));
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       async function cleanupDup() {
         const modalEl = document.getElementById("dupPreviewModal");
-        const modal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+        let modal = null;
+        try {
+          modal = modalEl && window.bootstrap && bootstrap.Modal
+            ? bootstrap.Modal.getOrCreateInstance(modalEl)
+            : null;
+        } catch (e) {
+          modal = null;
+        }
         const btn = document.getElementById("btnDupModalCleanup");
         if (btn) btn.disabled = true;
         try {
@@ -1204,9 +2055,10 @@
         previewDup();
       });
 
-      document.getElementById("btnDupCleanup")?.addEventListener("click", () => {
-        // 一键清理 = 先预览（模态框展示），再在模态框里“继续清理”完成二次确认
-        previewDup();
+      document.getElementById("btnDupCleanup")?.addEventListener("click", async () => {
+        const ok = window.confirm("确定要清理重复项吗？该操作会把每组重复中的“多余条目”移入回收站（soft delete）。");
+        if (!ok) return;
+        await cleanupDup();
       });
 
       document.getElementById("btnDupModalCleanup")?.addEventListener("click", () => {

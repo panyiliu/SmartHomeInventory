@@ -4,6 +4,7 @@ from typing import Optional
 
 from ..models import AiPromptTemplate
 from ..services.settings_service import get_category_options, get_location_options
+import re
 
 
 def get_prompt_by_category(category_code: str) -> Optional[AiPromptTemplate]:
@@ -38,8 +39,24 @@ def get_prompt_content(category_code: str, *, default_content: str = "") -> str:
             f"- 位置（location）只能从以下列表中选择：{locs_str}；否则返回空字符串。\n"
         )
 
-        # If user already pasted a similar block, avoid duplicating too much.
-        if "【分类/位置" not in base:
+        # The base prompt often already contains the *reference* "【分类/位置 选项（必须严格遵守）】",
+        # so we must not gate by "【分类/位置" substring.
+        # Instead, detect whether the guard lines with actual lists exist; if not, append.
+        # If they exist, replace them with the latest configured lists.
+        guard_line = "- 位置（location）只能从以下列表中选择："
+        if guard_line in base:
+            # Replace the whole guard block to refresh latest option lists.
+            pattern = re.compile(
+                r"\n\n【分类/位置 选项（必须严格遵守）】\n"
+                r"- 分类（category）只能从以下列表中选择：.*?；否则返回“其他”。\n"
+                r"- 位置（location）只能从以下列表中选择：.*?；否则返回空字符串。\n",
+                flags=re.DOTALL,
+            )
+            if pattern.search(base):
+                base = pattern.sub(guard, base)
+            else:
+                base = base.rstrip() + guard
+        else:
             base = base.rstrip() + guard
 
     return base

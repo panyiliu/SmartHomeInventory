@@ -187,8 +187,17 @@
 
   <div class="card">
     <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
         <div class="text-muted">共 <span class="mono" id="invCount">{{ items|length }}</span> 项</div>
+        {% if current_user and current_user.is_admin() and view == 'trash' %}
+          <button class="btn btn-sm btn-outline-danger" type="button" id="btnTrashHardClear">
+            <i class="bi bi-trash-fill me-1"></i>清空回收站（永久删除）
+          </button>
+        {% elif current_user and current_user.is_admin() and view != 'trash' %}
+          <button class="btn btn-sm btn-outline-primary" type="button" id="btnDupCleanupQuick">
+            <i class="bi bi-eraser me-1"></i>一键清理重复项（活动）
+          </button>
+        {% endif %}
         <button class="btn btn-sm btn-outline-secondary d-none d-md-inline-flex align-items-center"
                 type="button"
                 id="btnBatchToggleDesktop">
@@ -267,7 +276,7 @@
                   <div class="d-flex justify-content-between align-items-center mt-1 inv-mobile-card-bottom">
                     <span class="small text-secondary fw-semibold text-nowrap inv-mobile-card-stored">已存放 {{ stored }} 天</span>
                     <div class="d-flex align-items-center gap-2">
-                      {% if view != 'usedup' %}
+                      {% if view not in ['usedup','trash'] %}
                         <form method="post"
                               action="{{ url_for('items.use_up_route', item_id=item.id) }}"
                               data-use-up
@@ -290,12 +299,17 @@
                     </div>
                   </div>
 
-                  {% if view == 'usedup' %}
+                  {% if view == 'usedup' or view == 'trash' %}
                   <div class="mt-3 d-flex gap-2 align-items-center">
                       {% if view == 'trash' %}
                         <form method="post" action="{{ url_for('items.restore', item_id=item.id) }}" onsubmit="return confirm('确认恢复：{{ item.name }}？');">
                           <button class="btn btn-outline-success tap-btn mini-action-btn" type="submit" aria-label="恢复">
                             <i class="bi bi-arrow-counterclockwise"></i>
+                          </button>
+                        </form>
+                        <form method="post" action="{{ url_for('items.hard_delete', item_id=item.id) }}" onsubmit="return confirm('确认永久删除：{{ item.name }}？此操作不可恢复');">
+                          <button class="btn btn-outline-danger tap-btn mini-action-btn" type="submit" aria-label="硬删除">
+                            <i class="bi bi-trash-fill"></i>
                           </button>
                         </form>
                       {% else %}
@@ -384,6 +398,9 @@
                         <form method="post" action="{{ url_for('items.restore', item_id=item.id) }}" onsubmit="return confirm('确认恢复：{{ item.name }}？');">
                           <button class="btn btn-sm btn-outline-success" type="submit">恢复</button>
                         </form>
+                        <form method="post" action="{{ url_for('items.hard_delete', item_id=item.id) }}" onsubmit="return confirm('确认永久删除：{{ item.name }}？此操作不可恢复');">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">硬删除</button>
+                        </form>
                       {% else %}
                         <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认移入回收站：{{ item.name }}？');">
                           <button class="btn btn-sm btn-danger" type="submit">删除</button>
@@ -415,11 +432,13 @@
           <i class="bi bi-x-lg me-1"></i>关闭批量
         </button>
         <button class="btn btn-outline-secondary btn-sm" type="button" id="btnBatchClear">清除选择</button>
-        <button class="btn btn-outline-danger btn-sm" type="button" id="btnBatchUseUp">
-          <i class="bi bi-trash me-1"></i>批量标记用完
-        </button>
+        {% if view != 'trash' %}
+          <button class="btn btn-outline-danger btn-sm" type="button" id="btnBatchUseUp">
+            <i class="bi bi-trash me-1"></i>批量标记用完
+          </button>
+        {% endif %}
         <button class="btn btn-danger btn-sm" type="button" id="btnBatchDelete">
-          <i class="bi bi-x-circle me-1"></i>批量删除
+          <i class="bi bi-x-circle me-1"></i>{% if view == 'trash' %}一键硬删除（不可恢复）{% else %}批量删除{% endif %}
         </button>
       </div>
     </div>
@@ -445,9 +464,49 @@
     </div>
   </div>
 
+  <style>
+    #btnScrollTop{
+      position: fixed;
+      right: 16px;
+      bottom: 86px; /* avoid overlapping with the mobile "fab" add button */
+      z-index: 1030;
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,.86);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(16,24,40,.08);
+      box-shadow: 0 18px 30px rgba(0,30,0,.14);
+    }
+    @media (min-width: 768px){
+      #btnScrollTop{ bottom: 16px; }
+    }
+  </style>
+  <button id="btnScrollTop" type="button" class="btn btn-outline-secondary d-none" aria-label="回到最上方" title="回到最上方">
+    <i class="bi bi-arrow-up-short"></i>
+  </button>
+
   <script>
     (function () {
       const CURRENT_VIEW = "{{ view }}";
+
+      // Floating "back to top" button (visible only after scrolling down).
+      const btnScrollTop = document.getElementById("btnScrollTop");
+      const SCROLL_TOP_SHOW_Y = 240;
+      if (btnScrollTop) {
+        const update = () => {
+          if ((window.scrollY || 0) > SCROLL_TOP_SHOW_Y) btnScrollTop.classList.remove("d-none");
+          else btnScrollTop.classList.add("d-none");
+        };
+        window.addEventListener("scroll", update, { passive: true });
+        update();
+        btnScrollTop.addEventListener("click", () => {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
 
       // Remaining-days progress bars (set widths from data-pct)
       document.querySelectorAll(".remain-bar > span[data-pct]").forEach((el) => {
@@ -883,6 +942,8 @@
       const btnBatchClose = document.getElementById("btnBatchClose");
       const batchToggleText = document.getElementById("batchToggleText");
       const batchToggleDesktopText = document.getElementById("batchToggleDesktopText");
+      const btnDupCleanupQuick = document.getElementById("btnDupCleanupQuick");
+      const btnTrashHardClear = document.getElementById("btnTrashHardClear");
       let batchMode = false;
 
       function setBatchMode(on) {
@@ -1013,6 +1074,8 @@
           msg = `确定将 ${ids.length} 个物品标记为已用完吗？`;
         } else if (action === "delete") {
           msg = `确定要将这 ${ids.length} 个物品移入回收站吗？`;
+        } else if (action === "hard_delete") {
+          msg = `确定要将这 ${ids.length} 个物品永久删除吗？此操作不可恢复。`;
         }
         if (msg && !window.confirm(msg)) return;
         fetch("/items/batch", {
@@ -1041,7 +1104,53 @@
         btnBatchUseUp.addEventListener("click", () => runBatch("useup"));
       }
       if (btnBatchDelete) {
-        btnBatchDelete.addEventListener("click", () => runBatch("delete"));
+        btnBatchDelete.addEventListener("click", () => runBatch(CURRENT_VIEW === "trash" ? "hard_delete" : "delete"));
+      }
+
+      async function cleanupDupQuick() {
+        const ok = window.confirm("确定要清理重复项（仅活动数据）吗？该操作会把每组重复中的“多余条目”移入回收站（soft delete）。");
+        if (!ok) return;
+        try {
+          const resp = await fetch("{{ url_for('admin.items_duplicates_cleanup') }}", { method: "POST" });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data || !data.success) {
+            const msg = data && (data.error || data.message || data.code) ? (data.error || data.message || data.code) : "清理失败";
+            showToast(`❌ ${msg}`, "danger");
+            return;
+          }
+          const del = data.to_delete_count ?? 0;
+          showToast(`✅ 已清理重复项：移入回收站 ${del} 条。`, "success");
+          setTimeout(() => window.location.reload(), 250);
+        } catch (e) {
+          showToast("❌ 网络或服务异常，请稍后重试。", "danger");
+        }
+      }
+
+      if (btnDupCleanupQuick) {
+        btnDupCleanupQuick.addEventListener("click", () => cleanupDupQuick());
+      }
+
+      async function hardClearTrashQuick() {
+        const ok = window.confirm("确定要清空回收站里的全部物品吗？此操作为永久删除，不可恢复。");
+        if (!ok) return;
+        try {
+          const resp = await fetch("{{ url_for('items.trash_hard_clear') }}", { method: "POST" });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data || !data.ok) {
+            const msg = data && (data.error || data.message || data.code) ? (data.error || data.message || data.code) : "清空失败";
+            showToast(`❌ ${msg}`, "danger");
+            return;
+          }
+          const deleted = data.deleted ?? 0;
+          showToast(`✅ 已永久删除回收站物品：${deleted} 条。`, "success");
+          setTimeout(() => window.location.reload(), 200);
+        } catch (e) {
+          showToast("❌ 网络或服务异常，请稍后重试。", "danger");
+        }
+      }
+
+      if (btnTrashHardClear) {
+        btnTrashHardClear.addEventListener("click", () => hardClearTrashQuick());
       }
 
       // 初始同步一次，确保刷新后批量栏状态正确
