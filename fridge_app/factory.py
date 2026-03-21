@@ -10,7 +10,7 @@ from flask import Flask
 from .config import load_config
 from .extensions import db
 from .models import Setting, User
-from .models import AiModel, AiPromptTemplate
+from .models import AiModel, AiPromptTemplate, AiAsyncJob  # noqa: F401 — 注册 ORM 表
 import json
 from .routes.admin import bp as admin_bp
 from .routes.api.admin import bp as admin_api_bp

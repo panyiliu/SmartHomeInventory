@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from filelock import FileLock, Timeout
 
 from .settings_service import get_setting, set_setting
 
@@ -33,21 +35,24 @@ def get_backup_cron() -> str:
     )
 
 
-def should_start_scheduler() -> bool:
-    """
-    Gunicorn with multiple workers will start the app multiple times.
-    Only start scheduler on one worker to avoid duplicated backups.
-    """
-    worker_id = (os.environ.get("GUNICORN_WORKER_ID") or "").strip()
-    if not worker_id:
-        return True
-    # Common: GUNICORN_WORKER_ID is "0", "1", ...
-    return worker_id == "0"
-
-
 def start_backup_scheduler(app) -> Optional[BackgroundScheduler]:
-    if not should_start_scheduler():
+    """
+    多 worker / 多进程时，每个进程都会 import 并调用本函数。
+    使用 instance 目录下的文件锁，保证全局只有一个进程运行 APScheduler，
+    避免重复备份与重复定时检查。（不依赖 GUNICORN_WORKER_ID 环境变量。）
+    """
+    instance = Path(app.instance_path)
+    instance.mkdir(parents=True, exist_ok=True)
+    lock_path = instance / "backup_scheduler.lock"
+    lock = FileLock(str(lock_path))
+    try:
+        lock.acquire(timeout=0)
+    except Timeout:
+        print("[BackupScheduler] 已有其他 worker/进程持有调度器锁，跳过启动")
         return None
+
+    # 保持锁引用，避免进程存活期间被 GC 释放
+    app.extensions["backup_scheduler_file_lock"] = lock
 
     scheduler: BackgroundScheduler = BackgroundScheduler(timezone="UTC")
     app.extensions["backup_scheduler"] = scheduler

@@ -7,6 +7,16 @@ from .ai_model import AiModel
 from .ai_prompt_template import AiPromptTemplate
 from .user import User
 from .audit_log import AuditLog
+from .ai_async_job import AiAsyncJob
 
-__all__ = ["Item", "Setting", "EmailLog", "AiModel", "AiPromptTemplate", "User", "AuditLog"]
+__all__ = [
+    "Item",
+    "Setting",
+    "EmailLog",
+    "AiModel",
+    "AiPromptTemplate",
+    "User",
+    "AuditLog",
+    "AiAsyncJob",
+]
 
