@@ -63,11 +63,14 @@
                   <button id="aiPendingAddSelectedBtnText" type="button" class="btn btn-primary btn-sm">
                     <i class="bi bi-check2-circle me-1"></i>加入已勾选
                   </button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" id="aiPendingAddRowText" title="在当前待确认列表增加一条空项，再点进名称编辑">
+                    <i class="bi bi-plus-lg me-1"></i>手动增加一项
+                  </button>
                   <button id="aiPendingClearBtnText" type="button" class="btn btn-outline-secondary btn-sm">清空</button>
                 </div>
               </div>
               <div id="aiPendingListText" class="mt-3 d-flex flex-column gap-2"></div>
-              <div class="form-text mt-2">AI 模式不显示手动表单字段；如需精细调整，请切换到“手动新增”。</div>
+              <div class="form-text mt-2">点击某条<strong>名称或摘要</strong>可进入「手动新增」里逐项修改；保存后返回本列表，其它条目不会丢失。也可「手动增加一项」再编辑。</div>
             </div>
           </div>
         </div>
@@ -96,11 +99,14 @@
                   <button id="aiPendingAddSelectedBtnPhoto" type="button" class="btn btn-primary btn-sm">
                     <i class="bi bi-check2-circle me-1"></i>加入已勾选
                   </button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" id="aiPendingAddRowPhoto" title="在当前待确认列表增加一条空项，再点进名称编辑">
+                    <i class="bi bi-plus-lg me-1"></i>手动增加一项
+                  </button>
                   <button id="aiPendingClearBtnPhoto" type="button" class="btn btn-outline-secondary btn-sm">清空</button>
                 </div>
               </div>
               <div id="aiPendingListPhoto" class="mt-3 d-flex flex-column gap-2"></div>
-              <div class="form-text mt-2">AI 模式不显示手动表单字段；如需精细调整，请切换到“手动新增”。</div>
+              <div class="form-text mt-2">点击某条<strong>名称或摘要</strong>可进入「手动新增」里逐项修改；保存后返回本列表，其它条目不会丢失。也可「手动增加一项」再编辑。</div>
             </div>
           </div>
         </div>
@@ -112,6 +118,15 @@
           </div>
 
           <form id="itemForm" class="row g-4 has-sticky-actions" autocomplete="off">
+            <div id="aiPendingEditBanner" class="col-12 alert alert-primary border-0 rounded-4 d-none mb-0" role="status" style="background: rgba(13,110,253,.09); border: 1px solid rgba(13,110,253,.2) !important;">
+              <div class="fw-semibold mb-1"><i class="bi bi-pencil-square me-1"></i>正在编辑「待确认」里的一项</div>
+              <div class="small text-muted mb-2">保存只会更新<strong>当前这一条</strong>，其余待确认项仍在原列表；取消则丢弃本次对表单的修改。</div>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-primary btn-sm" id="aiPendingEditSaveBtn">保存并返回待确认</button>
+                <button type="button" class="btn btn-success btn-sm" id="aiPendingEditSaveAddBtn">加入库存并返回</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="aiPendingEditCancelBtn">取消编辑</button>
+              </div>
+            </div>
             <div class="col-12 col-md-6">
               <label class="form-label">名称<span class="req">*</span></label>
               <div class="input-group">
@@ -569,8 +584,15 @@
           const location = (document.getElementById("locationValue")?.value || "冰箱").trim() || "冰箱";
           const unit = (unitInput && unitInput.value) ? unitInput.value : "份";
           const note = (noteInput && noteInput.value) ? noteInput.value : "";
-          return { name, quantity: qty, category, location, unit, note };
+          let shelf_life_days = null;
+          if (shelfInput && String(shelfInput.value || "").trim() !== "") {
+            const n = parseInt(String(shelfInput.value).trim(), 10);
+            shelf_life_days = Number.isNaN(n) ? null : n;
+          }
+          return { name, quantity: qty, category, location, unit, note, shelf_life_days };
         }
+
+        window.__fridgeGetManualPayload = getManualPayload;
 
         async function addManual() {
           const payload = getManualPayload();
@@ -579,11 +601,20 @@
             try { nameInput.focus(); } catch (e) {}
             return;
           }
+          const body = {
+            name: payload.name,
+            quantity: payload.quantity,
+            category: payload.category,
+            location: payload.location,
+            unit: payload.unit,
+            note: payload.note,
+          };
+          if (payload.shelf_life_days != null) body.shelf_life_days = payload.shelf_life_days;
           submitBtn.disabled = true;
           submitBtn.querySelector(".btn-label")?.classList.add("d-none");
           submitBtn.querySelector(".btn-loading")?.classList.remove("d-none");
           try {
-            const itemId = await apiAddOne(payload);
+            const itemId = await apiAddOne(body);
             added.unshift({ item_id: itemId, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
             renderAdded();
             clearDraft(true);
@@ -599,6 +630,10 @@
 
         form.addEventListener("submit", (e) => {
           e.preventDefault();
+          if (window.__fridgePendingEditActive) {
+            toast("正在编辑待确认项：请用上方蓝色区域里的「保存」「加入库存」或「取消」。", "warning");
+            return;
+          }
           addManual();
         });
       })();
@@ -606,11 +641,26 @@
       // ---------------------------
       // AI mode ("快录"): input -> recognize -> confirm
       // ---------------------------
+      function escapeHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
       function normalizeAiItem(raw) {
         const it = raw && typeof raw === "object" ? raw : {};
         const name = String(it.name || "").trim();
         const category = String(it.category || "").trim();
         const location = String(it.location || "").trim();
+        const unit = String(it.unit || "份").trim() || "份";
+        const note = String(it.note || "").trim();
+        let shelf_life_days = null;
+        if (it.shelf_life_days !== undefined && it.shelf_life_days !== null && String(it.shelf_life_days).trim() !== "") {
+          const n = parseInt(String(it.shelf_life_days), 10);
+          shelf_life_days = Number.isNaN(n) ? null : n;
+        }
         let quantity = 0;
         if (typeof it.quantity === "number") quantity = it.quantity;
         else if (it.quantity !== undefined && it.quantity !== null) {
@@ -618,7 +668,11 @@
           quantity = Number.isNaN(n) ? 0 : n;
         }
         quantity = Math.max(0, Math.round(quantity));
-        return { name, quantity, category, location };
+        return { name, quantity, category, location, unit, note, shelf_life_days };
+      }
+
+      function newPendingId() {
+        return `p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       }
 
       async function addAiItem(it) {
@@ -627,23 +681,33 @@
           quantity: it.quantity || 1,
           category: it.category || "其他",
           location: it.location || "冰箱",
-          unit: "份",
-          note: "",
+          unit: (it.unit && String(it.unit).trim()) ? String(it.unit).trim() : "份",
+          note: (it.note && String(it.note)) ? String(it.note).trim() : "",
         };
+        if (it.shelf_life_days != null && it.shelf_life_days !== "") {
+          const n = parseInt(String(it.shelf_life_days), 10);
+          if (!Number.isNaN(n)) payload.shelf_life_days = n;
+        }
         const itemId = await apiAddOne(payload);
         added.unshift({ item_id: itemId, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
         renderAdded();
       }
 
       function initAiPanel(opts) {
+        const kind = opts.kind || "text";
         const panelEl = document.getElementById(opts.panelId);
         const listEl = document.getElementById(opts.listId);
         const countEl = document.getElementById(opts.countId);
         const addSelectedBtn = document.getElementById(opts.addSelectedBtnId);
         const clearBtn = document.getElementById(opts.clearBtnId);
+        const addRowBtn = opts.addRowBtnId ? document.getElementById(opts.addRowBtnId) : null;
         if (!panelEl || !listEl || !countEl) return null;
 
-        let pending = []; // {id, name, quantity, category, location, picked, added}
+        let pending = []; // {id, name, quantity, category, location, unit, note, shelf_life_days, picked, added}
+
+        function findById(pid) {
+          return pending.find((x) => String(x.id) === String(pid));
+        }
 
         function render() {
           const alive = pending.filter((x) => !x.added);
@@ -657,15 +721,18 @@
           listEl.innerHTML = "";
           alive.forEach((it) => {
             const row = document.createElement("div");
-            row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2";
+            row.className = "p-2 rounded-4 border bg-white d-flex align-items-center gap-2 ai-pending-row";
             row.setAttribute("data-id", String(it.id));
+            const title = it.name
+              ? `<span class="fw-semibold text-truncate d-block">${escapeHtml(it.name)}</span>`
+              : `<span class="fw-semibold text-truncate d-block text-muted">（未命名）点此处编辑</span>`;
             row.innerHTML = `
-              <input class="form-check-input" type="checkbox" data-role="pick" ${it.picked ? "checked" : ""} />
-              <div class="flex-grow-1" style="min-width:0;">
-                <div class="fw-semibold text-truncate">${it.name || "（未命名）"}</div>
-                <div class="text-muted small">${it.quantity} · ${(it.category || "其他")} · ${(it.location || "冰箱")}</div>
-              </div>
-              <button type="button" class="btn btn-outline-primary btn-sm" data-role="add">加入</button>
+              <input class="form-check-input flex-shrink-0" type="checkbox" data-role="pick" ${it.picked ? "checked" : ""} aria-label="勾选 ${escapeHtml(it.name || "未命名")}" />
+              <button type="button" class="btn btn-link text-decoration-none text-dark flex-grow-1 text-start p-0 ai-pending-edit-hit" style="min-width:0;" data-role="edit">
+                ${title}
+                <span class="text-muted small d-block">${it.quantity} · ${escapeHtml(it.category || "其他")} · ${escapeHtml(it.location || "冰箱")}</span>
+              </button>
+              <button type="button" class="btn btn-outline-primary btn-sm flex-shrink-0" data-role="add">加入</button>
             `;
             listEl.appendChild(row);
           });
@@ -675,16 +742,25 @@
           const pick = e.target.closest('[data-role="pick"]');
           if (pick) {
             const row = pick.closest("[data-id]");
-            const id = row ? Number(row.getAttribute("data-id")) : null;
-            const it = pending.find((x) => x.id === id);
+            const id = row ? row.getAttribute("data-id") : null;
+            const it = id ? findById(id) : null;
             if (it) it.picked = !!pick.checked;
+            return;
+          }
+          const editHit = e.target.closest('[data-role="edit"]');
+          if (editHit) {
+            const row = editHit.closest("[data-id]");
+            const id = row ? row.getAttribute("data-id") : null;
+            if (id && typeof window.__fridgeOpenPendingEdit === "function") {
+              window.__fridgeOpenPendingEdit(kind, id);
+            }
             return;
           }
           const addBtn = e.target.closest('[data-role="add"]');
           if (addBtn) {
             const row = addBtn.closest("[data-id]");
-            const id = row ? Number(row.getAttribute("data-id")) : null;
-            const it = pending.find((x) => x.id === id);
+            const id = row ? row.getAttribute("data-id") : null;
+            const it = id ? findById(id) : null;
             if (!it || it.added) return;
             addBtn.disabled = true;
             try {
@@ -721,29 +797,231 @@
           render();
         });
 
+        addRowBtn && addRowBtn.addEventListener("click", () => {
+          const nid = newPendingId();
+          pending.push({
+            id: nid,
+            name: "",
+            quantity: 1,
+            category: "其他",
+            location: "冰箱",
+            unit: "份",
+            note: "",
+            shelf_life_days: null,
+            picked: true,
+            added: false,
+          });
+          render();
+          if (typeof window.__fridgeOpenPendingEdit === "function") {
+            window.__fridgeOpenPendingEdit(kind, nid);
+          }
+        });
+
         function setPending(list) {
-          pending = (list || []).map((x, i) => ({ id: Date.now() + i, ...x, picked: true, added: false }));
+          pending = (list || []).map((x, i) => ({
+            id: newPendingId() + "-" + i,
+            name: x.name,
+            quantity: x.quantity,
+            category: x.category,
+            location: x.location,
+            unit: x.unit || "份",
+            note: x.note || "",
+            shelf_life_days: x.shelf_life_days != null ? x.shelf_life_days : null,
+            picked: true,
+            added: false,
+          }));
           render();
         }
 
+        function updateItemFromPayload(pid, p) {
+          const it = findById(pid);
+          if (!it || it.added) return false;
+          it.name = (p.name || "").trim();
+          it.quantity = Math.max(0, parseInt(String(p.quantity || 0), 10) || 0);
+          it.category = (p.category || "其他").trim() || "其他";
+          it.location = (p.location || "冰箱").trim() || "冰箱";
+          it.unit = (p.unit && String(p.unit).trim()) ? String(p.unit).trim() : "份";
+          it.note = (p.note && String(p.note)) ? String(p.note).trim() : "";
+          it.shelf_life_days = p.shelf_life_days != null ? p.shelf_life_days : null;
+          render();
+          return true;
+        }
+
         render();
-        return { setPending };
+        return { setPending, findById, updateItemFromPayload, render, kind };
       }
 
       const aiTextPanel = initAiPanel({
+        kind: "text",
         panelId: "aiPendingPanelText",
         listId: "aiPendingListText",
         countId: "aiPendingCountText",
         addSelectedBtnId: "aiPendingAddSelectedBtnText",
         clearBtnId: "aiPendingClearBtnText",
+        addRowBtnId: "aiPendingAddRowText",
       });
       const aiPhotoPanel = initAiPanel({
+        kind: "photo",
         panelId: "aiPendingPanelPhoto",
         listId: "aiPendingListPhoto",
         countId: "aiPendingCountPhoto",
         addSelectedBtnId: "aiPendingAddSelectedBtnPhoto",
         clearBtnId: "aiPendingClearBtnPhoto",
+        addRowBtnId: "aiPendingAddRowPhoto",
       });
+
+      function getAiPendingPanel(kind) {
+        return kind === "photo" ? aiPhotoPanel : aiTextPanel;
+      }
+
+      function fillManualFormFromPendingItem(it) {
+        const nameInput = document.getElementById("nameInput");
+        const qtyInput = document.getElementById("quantityInput");
+        const unitInput = document.querySelector('[name="unit"]');
+        const noteInput = document.querySelector('[name="note"]');
+        const shelfInput = document.querySelector('[name="shelf_life_days"]');
+        const catValue = document.getElementById("categoryValue");
+        const locValue = document.getElementById("locationValue");
+        const catSelect = document.getElementById("categorySelect");
+        const locSelect = document.getElementById("locationSelect");
+        const cat = (it.category || "其他").trim() || "其他";
+        const loc = (it.location || "冰箱").trim() || "冰箱";
+        if (nameInput) nameInput.value = it.name || "";
+        if (qtyInput) qtyInput.value = String(it.quantity != null ? it.quantity : 1);
+        if (unitInput) unitInput.value = it.unit || "份";
+        if (noteInput) noteInput.value = it.note || "";
+        if (shelfInput) shelfInput.value = it.shelf_life_days != null && it.shelf_life_days !== "" ? String(it.shelf_life_days) : "";
+        if (catValue) catValue.value = cat;
+        if (locValue) locValue.value = loc;
+        if (catSelect) catSelect.value = cat;
+        if (locSelect) locSelect.value = loc;
+        document.querySelectorAll("#categoryChips .chip").forEach((b) => {
+          b.classList.toggle("active", (b.getAttribute("data-value") || "") === cat);
+        });
+        document.querySelectorAll("#locationChips .chip").forEach((b) => {
+          b.classList.toggle("active", (b.getAttribute("data-value") || "") === loc);
+        });
+      }
+
+      function clearPendingEditUi() {
+        window.__fridgePendingEditActive = false;
+        window.__fridgePendingEditCtx = null;
+        const banner = document.getElementById("aiPendingEditBanner");
+        if (banner) banner.classList.add("d-none");
+        const submitBtn = document.getElementById("submitBtn");
+        const resetBtn = document.getElementById("resetDraftBtn");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.removeAttribute("title");
+        }
+        if (resetBtn) resetBtn.disabled = false;
+      }
+
+      function switchToAiTab(kind) {
+        try {
+          const tabId = kind === "photo" ? "tab-ai-photo" : "tab-ai-text";
+          const el = document.getElementById(tabId);
+          if (el) bootstrap.Tab.getOrCreateInstance(el).show();
+        } catch (e) {}
+      }
+
+      window.__fridgeOpenPendingEdit = function openPendingEdit(kind, id) {
+        const ctrl = getAiPendingPanel(kind);
+        if (!ctrl) return;
+        const it = ctrl.findById(id);
+        if (!it || it.added) return;
+        window.__fridgePendingEditActive = true;
+        window.__fridgePendingEditCtx = { kind, id: String(id) };
+        fillManualFormFromPendingItem(it);
+        const banner = document.getElementById("aiPendingEditBanner");
+        if (banner) banner.classList.remove("d-none");
+        const submitBtn = document.getElementById("submitBtn");
+        const resetBtn = document.getElementById("resetDraftBtn");
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.setAttribute("title", "编辑待确认项时请使用上方蓝色区域内的按钮");
+        }
+        if (resetBtn) resetBtn.disabled = true;
+        try {
+          bootstrap.Tab.getOrCreateInstance(document.getElementById("tab-manual")).show();
+        } catch (e) {}
+        window.setTimeout(() => {
+          try {
+            document.getElementById("nameInput")?.focus();
+          } catch (x) {}
+        }, 350);
+      };
+
+      (function bindAiPendingEditBanner() {
+        const saveBtn = document.getElementById("aiPendingEditSaveBtn");
+        const saveAddBtn = document.getElementById("aiPendingEditSaveAddBtn");
+        const cancelBtn = document.getElementById("aiPendingEditCancelBtn");
+        function ctx() {
+          return window.__fridgePendingEditCtx;
+        }
+        function gp() {
+          return typeof window.__fridgeGetManualPayload === "function" ? window.__fridgeGetManualPayload() : null;
+        }
+        saveBtn && saveBtn.addEventListener("click", () => {
+          const c = ctx();
+          if (!c) return;
+          const p = gp();
+          if (!p || !p.name) {
+            toast("名称不能为空", "warning");
+            return;
+          }
+          const ctrl = getAiPendingPanel(c.kind);
+          if (!ctrl || !ctrl.updateItemFromPayload(c.id, p)) {
+            toast("未找到待编辑项，可能已被清空", "danger");
+            clearPendingEditUi();
+            switchToAiTab(c.kind);
+            return;
+          }
+          clearPendingEditUi();
+          switchToAiTab(c.kind);
+          toast("已保存修改", "success");
+        });
+        saveAddBtn && saveAddBtn.addEventListener("click", async () => {
+          const c = ctx();
+          if (!c) return;
+          const p = gp();
+          if (!p || !p.name) {
+            toast("名称不能为空", "warning");
+            return;
+          }
+          const ctrl = getAiPendingPanel(c.kind);
+          const it = ctrl ? ctrl.findById(c.id) : null;
+          if (!it || it.added) {
+            toast("未找到待编辑项", "danger");
+            clearPendingEditUi();
+            return;
+          }
+          saveAddBtn.disabled = true;
+          try {
+            ctrl.updateItemFromPayload(c.id, p);
+            await addAiItem(it);
+            it.added = true;
+            ctrl.render();
+            clearPendingEditUi();
+            switchToAiTab(c.kind);
+            toast(`已加入库存：${it.name}`, "success");
+          } catch (err) {
+            toast((err && err.message) ? err.message : "加入失败", "danger");
+          } finally {
+            saveAddBtn.disabled = false;
+          }
+        });
+        cancelBtn && cancelBtn.addEventListener("click", () => {
+          const c = ctx();
+          if (c) {
+            const ctrl = getAiPendingPanel(c.kind);
+            const it = ctrl ? ctrl.findById(c.id) : null;
+            if (it) fillManualFormFromPendingItem(it);
+          }
+          clearPendingEditUi();
+          if (c) switchToAiTab(c.kind);
+        });
+      })();
 
       // ---------------------------
       // AI job polling (fix: 切换页面/息屏再点亮丢进度)
