@@ -366,6 +366,7 @@
       const AI_TEXT_ENABLED = rootCard ? rootCard.getAttribute("data-ai-text-enabled") === "1" : false;
       const aiTextLogEl = document.getElementById("aiTextLog");
       const aiPhotoLogEl = document.getElementById("aiPhotoLog");
+      const aiModalEl = document.getElementById("aiModal");
 
       function logAi(el, msg) {
         if (!el || !msg) return;
@@ -951,7 +952,6 @@
       // AI photo
       const aiBtn = document.getElementById("aiRecognizeBtn2");
       const aiInput = document.getElementById("aiImageInput");
-      const aiModalEl = document.getElementById("aiModal");
       if (aiBtn && aiInput) {
         aiBtn.addEventListener("click", () => aiInput.click());
         aiInput.addEventListener("change", async () => {
@@ -1036,27 +1036,33 @@
           if (parseJobId && !aiParseJobRunning) {
             aiParseJobRunning = true;
             if (aiTextParseBtn) aiTextParseBtn.disabled = true;
-            updateAiModalText("正在解析文本…", "请稍候，识别结果会自动出现在下方待确认列表。");
-            const aiModalEl = getAiModalEl();
-            const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
-            if (modal) modal.show();
-            logAi(aiTextLogEl, `🕒 恢复等待：文本解析 job_id=${parseJobId.slice(0, 10)}…`);
-            const result = await pollAiJobResult(parseJobId, (waited) => {
-              updateAiModalText(`正在解析文本…（已等待 ${waited}s）`, "请稍候，识别结果会自动出现在下方待确认列表。");
-            });
-            const arr = Array.isArray(result) ? result : [];
-            const list = arr.map(normalizeAiItem).filter((x) => x.name);
-            if (!list.length) {
-              toast("未识别到物品，可手动新增", "warning");
-            } else {
-              aiTextPanel && aiTextPanel.setPending(list);
-              toast(`成功识别到 ${list.length} 项`, "success");
-              logAi(aiTextLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+            try {
+              updateAiModalText("正在解析文本…", "请稍候，识别结果会自动出现在下方待确认列表。");
+              const modalEl = getAiModalEl();
+              const modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl, { backdrop: "static", keyboard: false }) : null;
+              if (modal) modal.show();
+              logAi(aiTextLogEl, `🕒 恢复等待：文本解析 job_id=${parseJobId.slice(0, 10)}…`);
+              const result = await pollAiJobResult(parseJobId, (waited) => {
+                updateAiModalText(`正在解析文本…（已等待 ${waited}s）`, "请稍候，识别结果会自动出现在下方待确认列表。");
+              });
+              const arr = Array.isArray(result) ? result : [];
+              const list = arr.map(normalizeAiItem).filter((x) => x.name);
+              if (!list.length) {
+                toast("未识别到物品，可手动新增", "warning");
+              } else {
+                aiTextPanel && aiTextPanel.setPending(list);
+                toast(`成功识别到 ${list.length} 项`, "success");
+                logAi(aiTextLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+              }
+              localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
+            } catch (inner) {
+              try { localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY); } catch (x) {}
+              logAi(aiTextLogEl, `❌ 恢复解析失败：${inner && inner.message ? inner.message : "未知错误"}`);
+            } finally {
+              aiParseJobRunning = false;
+              if (aiTextParseBtn) aiTextParseBtn.disabled = false;
+              hideAiModal();
             }
-            localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY);
-            aiParseJobRunning = false;
-            hideAiModal();
-            if (aiTextParseBtn) aiTextParseBtn.disabled = false;
           }
 
           // Food recognize (photo)
@@ -1064,33 +1070,41 @@
           if (recogJobId && !aiRecogJobRunning) {
             aiRecogJobRunning = true;
             const aiInputLocal = document.getElementById("aiImageInput");
-            const aiModalEl = getAiModalEl();
-            updateAiModalText("正在识别图片…", "请稍候，识别结果会自动回填到表单。");
-            const modal = aiModalEl ? bootstrap.Modal.getOrCreateInstance(aiModalEl, { backdrop: "static", keyboard: false }) : null;
-            if (modal) modal.show();
-            logAi(aiPhotoLogEl, `🕒 恢复等待：图片识别 job_id=${recogJobId.slice(0, 10)}…`);
-            const result = await pollAiJobResult(recogJobId, (waited) => {
-              updateAiModalText(`正在识别图片…（已等待 ${waited}s）`, "请稍候，识别结果会自动回填到表单。");
-            });
-            const arr = Array.isArray(result) ? result : [];
-            const list = arr.map(normalizeAiItem).filter((x) => x.name);
-            if (!list.length) {
-              toast("未识别到物品，可手动新增", "warning");
-              logAi(aiPhotoLogEl, "🤔 恢复识别：未识别到明确物品。");
-            } else {
-              aiPhotoPanel && aiPhotoPanel.setPending(list);
-              toast(`成功识别到 ${list.length} 项`, "success");
-              logAi(aiPhotoLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+            try {
+              updateAiModalText("正在识别图片…", "请稍候，识别结果会自动回填到表单。");
+              const modalEl = getAiModalEl();
+              const modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl, { backdrop: "static", keyboard: false }) : null;
+              if (modal) modal.show();
+              logAi(aiPhotoLogEl, `🕒 恢复等待：图片识别 job_id=${recogJobId.slice(0, 10)}…`);
+              const result = await pollAiJobResult(recogJobId, (waited) => {
+                updateAiModalText(`正在识别图片…（已等待 ${waited}s）`, "请稍候，识别结果会自动回填到表单。");
+              });
+              const arr = Array.isArray(result) ? result : [];
+              const list = arr.map(normalizeAiItem).filter((x) => x.name);
+              if (!list.length) {
+                toast("未识别到物品，可手动新增", "warning");
+                logAi(aiPhotoLogEl, "🤔 恢复识别：未识别到明确物品。");
+              } else {
+                aiPhotoPanel && aiPhotoPanel.setPending(list);
+                toast(`成功识别到 ${list.length} 项`, "success");
+                logAi(aiPhotoLogEl, `✨ 成功恢复识别：${list.length} 项。`);
+              }
+              localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
+            } catch (inner) {
+              try { localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY); } catch (x) {}
+              logAi(aiPhotoLogEl, `❌ 恢复识别失败：${inner && inner.message ? inner.message : "未知错误"}`);
+            } finally {
+              aiRecogJobRunning = false;
+              if (aiInputLocal) aiInputLocal.value = "";
+              hideAiModal();
             }
-            localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY);
-            aiRecogJobRunning = false;
-            if (aiInputLocal) aiInputLocal.value = "";
-            hideAiModal();
           }
         } catch (e) {
-          // If resume fails, don't block the page.
           aiParseJobRunning = false;
           aiRecogJobRunning = false;
+          try { localStorage.removeItem(AI_PARSE_TEXT_JOB_KEY); } catch (x) {}
+          try { localStorage.removeItem(AI_RECOG_FOOD_JOB_KEY); } catch (x) {}
+          if (aiTextParseBtn) aiTextParseBtn.disabled = false;
           hideAiModal();
         }
       })();

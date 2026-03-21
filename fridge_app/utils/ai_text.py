@@ -11,7 +11,7 @@ import requests
 
 from .prompt_templates import get_prompt_content
 from ..services.settings_service import get_category_options, get_location_options, normalize_icon_spec
-from .ai_engine_runtime import text_extract_icon_suggest_with_engine
+from .ai_engine_runtime import text_extract_icon_suggest_with_engine, text_extract_with_engine
 
 PROMPT_TEXT_TO_ITEMS = """
 你是家庭食材物品识别助手。
