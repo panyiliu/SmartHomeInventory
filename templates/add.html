@@ -2,11 +2,19 @@
 {% block title %}新增 - 小仓屋{% endblock %}
 
 {% block content %}
+  <style>
+    .ai-pending-edit-banner {
+      position: sticky;
+      top: 0.35rem;
+      z-index: 1025;
+      box-shadow: 0 6px 18px rgba(13, 110, 253, 0.08);
+    }
+  </style>
   <div class="card" data-ai-text-enabled="{{ 1 if ai_text_enabled else 0 }}">
     <div class="card-body p-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <a class="text-decoration-none text-muted small" href="{{ url_for('main.index') }}"><i class="bi bi-arrow-left me-1"></i>返回列表</a>
+          <a class="text-decoration-none text-muted small js-add-leave-index" href="{{ url_for('main.index') }}"><i class="bi bi-arrow-left me-1"></i>返回列表</a>
           <div class="mt-1">
             <h4 class="mb-0 fw-semibold">新增项目</h4>
             <div class="text-muted small">把新鲜食材记下来，随时掌握库存。</div>
@@ -118,9 +126,9 @@
           </div>
 
           <form id="itemForm" class="row g-4 has-sticky-actions" autocomplete="off">
-            <div id="aiPendingEditBanner" class="col-12 alert alert-primary border-0 rounded-4 d-none mb-0" role="status" style="background: rgba(13,110,253,.09); border: 1px solid rgba(13,110,253,.2) !important;">
+            <div id="aiPendingEditBanner" class="col-12 alert alert-primary border-0 rounded-4 d-none mb-0 ai-pending-edit-banner" role="status" style="background: rgba(13,110,253,.09); border: 1px solid rgba(13,110,253,.2) !important;">
               <div class="fw-semibold mb-1"><i class="bi bi-pencil-square me-1"></i>正在编辑「待确认」里的一项</div>
-              <div class="small text-muted mb-2">保存只会更新<strong>当前这一条</strong>，其余待确认项仍在原列表；取消则丢弃本次对表单的修改。</div>
+              <div class="small text-muted mb-2">保存只会更新<strong>当前这一条</strong>，其余待确认项仍在原列表。底部<strong>「确认加入」</strong>此时等同于「保存并返回待确认」（不会直接入库）。要入库请用下方绿色按钮。</div>
               <div class="d-flex flex-wrap gap-2">
                 <button type="button" class="btn btn-primary btn-sm" id="aiPendingEditSaveBtn">保存并返回待确认</button>
                 <button type="button" class="btn btn-success btn-sm" id="aiPendingEditSaveAddBtn">加入库存并返回</button>
@@ -231,7 +239,8 @@
                 <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>加入中...</span>
               </button>
               <button id="resetDraftBtn" class="btn btn-outline-secondary" type="button"><i class="bi bi-eraser me-1"></i>清空表单</button>
-              <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}"><i class="bi bi-x-circle me-1"></i>返回列表</a>
+              <button type="button" class="btn btn-outline-primary d-none" id="btnBackToAiPending"><i class="bi bi-list-check me-1"></i>返回待确认列表</button>
+              <a class="btn btn-outline-secondary js-add-leave-index" href="{{ url_for('main.index') }}"><i class="bi bi-x-circle me-1"></i>返回列表（首页）</a>
             </div>
           </form>
         </div>
@@ -575,7 +584,14 @@
           }
           try { nameInput.focus(); } catch (e) {}
         }
-        resetBtn && resetBtn.addEventListener("click", () => clearDraft(true));
+        resetBtn && resetBtn.addEventListener("click", () => {
+          if (window.__fridgePendingEditActive && typeof window.__fridgeRestorePendingEditForm === "function") {
+            window.__fridgeRestorePendingEditForm();
+            toast("已还原为待确认列表里本条的数据（未保存的修改已丢弃）", "info");
+            return;
+          }
+          clearDraft(true);
+        });
 
         function getManualPayload() {
           const name = (nameInput.value || "").trim();
@@ -631,7 +647,9 @@
         form.addEventListener("submit", (e) => {
           e.preventDefault();
           if (window.__fridgePendingEditActive) {
-            toast("正在编辑待确认项：请用上方蓝色区域里的「保存」「加入库存」或「取消」。", "warning");
+            if (typeof window.__fridgeSavePendingEditFromForm === "function") {
+              window.__fridgeSavePendingEditFromForm();
+            }
             return;
           }
           addManual();
@@ -715,6 +733,7 @@
           if (!alive.length) {
             panelEl.classList.add("d-none");
             listEl.innerHTML = "";
+            try { window.__fridgeUpdateAddChrome && window.__fridgeUpdateAddChrome(); } catch (e) {}
             return;
           }
           panelEl.classList.remove("d-none");
@@ -736,6 +755,11 @@
             `;
             listEl.appendChild(row);
           });
+          try { window.__fridgeUpdateAddChrome && window.__fridgeUpdateAddChrome(); } catch (e) {}
+        }
+
+        function countAlive() {
+          return pending.filter((x) => !x.added).length;
         }
 
         listEl.addEventListener("click", async (e) => {
@@ -848,7 +872,7 @@
         }
 
         render();
-        return { setPending, findById, updateItemFromPayload, render, kind };
+        return { setPending, findById, updateItemFromPayload, render, kind, countAlive };
       }
 
       const aiTextPanel = initAiPanel({
@@ -869,6 +893,18 @@
         clearBtnId: "aiPendingClearBtnPhoto",
         addRowBtnId: "aiPendingAddRowPhoto",
       });
+
+      function totalAlivePending() {
+        return (aiTextPanel && typeof aiTextPanel.countAlive === "function" ? aiTextPanel.countAlive() : 0)
+          + (aiPhotoPanel && typeof aiPhotoPanel.countAlive === "function" ? aiPhotoPanel.countAlive() : 0);
+      }
+
+      window.__fridgeUpdateAddChrome = function () {
+        const n = totalAlivePending();
+        const ed = !!window.__fridgePendingEditActive;
+        const btn = document.getElementById("btnBackToAiPending");
+        if (btn) btn.classList.toggle("d-none", n === 0 && !ed);
+      };
 
       function getAiPendingPanel(kind) {
         return kind === "photo" ? aiPhotoPanel : aiTextPanel;
@@ -903,18 +939,42 @@
         });
       }
 
+      function setManualModeLabels(pendingEditOn) {
+        const submitBtn = document.getElementById("submitBtn");
+        const lab = submitBtn?.querySelector(".btn-label");
+        if (lab) {
+          if (pendingEditOn) {
+            if (!lab.dataset.origHtml) lab.dataset.origHtml = lab.innerHTML;
+            lab.innerHTML = '<i class="bi bi-check2-circle me-1"></i>保存修改并返回待确认';
+          } else if (lab.dataset.origHtml) {
+            lab.innerHTML = lab.dataset.origHtml;
+            delete lab.dataset.origHtml;
+          }
+        }
+        const rb = document.getElementById("resetDraftBtn");
+        if (rb) {
+          if (pendingEditOn) {
+            if (!rb.dataset.origHtml) rb.dataset.origHtml = rb.innerHTML;
+            rb.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>还原本条';
+          } else if (rb.dataset.origHtml) {
+            rb.innerHTML = rb.dataset.origHtml;
+            delete rb.dataset.origHtml;
+          }
+        }
+      }
+
       function clearPendingEditUi() {
         window.__fridgePendingEditActive = false;
         window.__fridgePendingEditCtx = null;
         const banner = document.getElementById("aiPendingEditBanner");
         if (banner) banner.classList.add("d-none");
         const submitBtn = document.getElementById("submitBtn");
-        const resetBtn = document.getElementById("resetDraftBtn");
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.removeAttribute("title");
         }
-        if (resetBtn) resetBtn.disabled = false;
+        setManualModeLabels(false);
+        try { window.__fridgeUpdateAddChrome(); } catch (e) {}
       }
 
       function switchToAiTab(kind) {
@@ -924,6 +984,36 @@
           if (el) bootstrap.Tab.getOrCreateInstance(el).show();
         } catch (e) {}
       }
+
+      function applySavePendingEditFromForm() {
+        const c = window.__fridgePendingEditCtx;
+        if (!c) return false;
+        const p = typeof window.__fridgeGetManualPayload === "function" ? window.__fridgeGetManualPayload() : null;
+        if (!p || !p.name) {
+          toast("名称不能为空", "warning");
+          return false;
+        }
+        const ctrl = getAiPendingPanel(c.kind);
+        if (!ctrl || !ctrl.updateItemFromPayload(c.id, p)) {
+          toast("未找到待编辑项，可能已被清空", "danger");
+          clearPendingEditUi();
+          switchToAiTab(c.kind);
+          return false;
+        }
+        clearPendingEditUi();
+        switchToAiTab(c.kind);
+        toast("已保存修改", "success");
+        return true;
+      }
+      window.__fridgeSavePendingEditFromForm = applySavePendingEditFromForm;
+
+      window.__fridgeRestorePendingEditForm = function () {
+        const c = window.__fridgePendingEditCtx;
+        if (!c) return;
+        const ctrl = getAiPendingPanel(c.kind);
+        const it = ctrl ? ctrl.findById(c.id) : null;
+        if (it) fillManualFormFromPendingItem(it);
+      };
 
       window.__fridgeOpenPendingEdit = function openPendingEdit(kind, id) {
         const ctrl = getAiPendingPanel(kind);
@@ -935,13 +1025,10 @@
         fillManualFormFromPendingItem(it);
         const banner = document.getElementById("aiPendingEditBanner");
         if (banner) banner.classList.remove("d-none");
-        const submitBtn = document.getElementById("submitBtn");
-        const resetBtn = document.getElementById("resetDraftBtn");
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.setAttribute("title", "编辑待确认项时请使用上方蓝色区域内的按钮");
-        }
-        if (resetBtn) resetBtn.disabled = true;
+        setManualModeLabels(true);
+        try {
+          window.__fridgeUpdateAddChrome();
+        } catch (e) {}
         try {
           bootstrap.Tab.getOrCreateInstance(document.getElementById("tab-manual")).show();
         } catch (e) {}
@@ -963,23 +1050,8 @@
           return typeof window.__fridgeGetManualPayload === "function" ? window.__fridgeGetManualPayload() : null;
         }
         saveBtn && saveBtn.addEventListener("click", () => {
-          const c = ctx();
-          if (!c) return;
-          const p = gp();
-          if (!p || !p.name) {
-            toast("名称不能为空", "warning");
-            return;
-          }
-          const ctrl = getAiPendingPanel(c.kind);
-          if (!ctrl || !ctrl.updateItemFromPayload(c.id, p)) {
-            toast("未找到待编辑项，可能已被清空", "danger");
-            clearPendingEditUi();
-            switchToAiTab(c.kind);
-            return;
-          }
-          clearPendingEditUi();
-          switchToAiTab(c.kind);
-          toast("已保存修改", "success");
+          if (!ctx()) return;
+          applySavePendingEditFromForm();
         });
         saveAddBtn && saveAddBtn.addEventListener("click", async () => {
           const c = ctx();
@@ -1021,6 +1093,39 @@
           clearPendingEditUi();
           if (c) switchToAiTab(c.kind);
         });
+      })();
+
+      (function bindAddPageLeaveGuards() {
+        document.querySelectorAll("a.js-add-leave-index").forEach((a) => {
+          a.addEventListener("click", (e) => {
+            const n = totalAlivePending();
+            if (n <= 0 && !window.__fridgePendingEditActive) return;
+            e.preventDefault();
+            const ok = window.confirm(
+              "当前还有「待确认」的识别结果未入库，离开本页会全部丢失。\n\n建议点「取消」，用「返回待确认列表」或切换到「AI 文本录入 / AI 拍照识别」继续处理。\n\n仍要去首页库存列表吗？"
+            );
+            if (ok) window.location.href = a.getAttribute("href") || "/";
+          });
+        });
+        const backPend = document.getElementById("btnBackToAiPending");
+        backPend && backPend.addEventListener("click", () => {
+          const c = window.__fridgePendingEditCtx;
+          if (c) {
+            const ctrl = getAiPendingPanel(c.kind);
+            const it = ctrl ? ctrl.findById(c.id) : null;
+            if (it) fillManualFormFromPendingItem(it);
+            clearPendingEditUi();
+            switchToAiTab(c.kind);
+            try { window.__fridgeUpdateAddChrome(); } catch (e) {}
+            return;
+          }
+          const nt = aiTextPanel && typeof aiTextPanel.countAlive === "function" ? aiTextPanel.countAlive() : 0;
+          const np = aiPhotoPanel && typeof aiPhotoPanel.countAlive === "function" ? aiPhotoPanel.countAlive() : 0;
+          if (nt === 0 && np === 0) return;
+          if (nt >= np) switchToAiTab("text");
+          else switchToAiTab("photo");
+        });
+        try { window.__fridgeUpdateAddChrome(); } catch (e) {}
       })();
 
       // ---------------------------
