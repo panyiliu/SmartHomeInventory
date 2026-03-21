@@ -474,6 +474,51 @@
         return data.item_id;
       }
 
+      function aiPendingToApiPayload(it) {
+        const payload = {
+          name: (it.name || "").trim(),
+          quantity: it.quantity || 1,
+          category: it.category || "其他",
+          location: it.location || "冰箱",
+          unit: (it.unit && String(it.unit).trim()) ? String(it.unit).trim() : "份",
+          note: (it.note && String(it.note)) ? String(it.note).trim() : "",
+        };
+        if (it.shelf_life_days != null && it.shelf_life_days !== "") {
+          const n = parseInt(String(it.shelf_life_days), 10);
+          if (!Number.isNaN(n)) payload.shelf_life_days = n;
+        }
+        return payload;
+      }
+
+      async function apiAddBatch(itemsPayload) {
+        const r = await fetch("/api/items/add-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ items: itemsPayload }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data || !data.ok) throw new Error((data && data.error) ? data.error : "批量加入失败");
+        return data.items || [];
+      }
+
+      async function addAiItemsBatch(its) {
+        const valid = its.filter((x) => (x.name || "").trim());
+        if (!valid.length) throw new Error("没有可加入的项目（名称不能为空）");
+        const rows = await apiAddBatch(valid.map(aiPendingToApiPayload));
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          const row = rows[i];
+          added.unshift({
+            item_id: row.item_id,
+            name: row.name,
+            quantity: row.quantity,
+            unit: row.unit,
+            category: row.category,
+            location: row.location,
+          });
+        }
+        renderAdded();
+      }
+
       // ---------------------------
       // Manual mode ("精录")
       // ---------------------------
@@ -694,21 +739,7 @@
       }
 
       async function addAiItem(it) {
-        const payload = {
-          name: it.name,
-          quantity: it.quantity || 1,
-          category: it.category || "其他",
-          location: it.location || "冰箱",
-          unit: (it.unit && String(it.unit).trim()) ? String(it.unit).trim() : "份",
-          note: (it.note && String(it.note)) ? String(it.note).trim() : "",
-        };
-        if (it.shelf_life_days != null && it.shelf_life_days !== "") {
-          const n = parseInt(String(it.shelf_life_days), 10);
-          if (!Number.isNaN(n)) payload.shelf_life_days = n;
-        }
-        const itemId = await apiAddOne(payload);
-        added.unshift({ item_id: itemId, name: payload.name, quantity: payload.quantity, unit: payload.unit, category: payload.category, location: payload.location });
-        renderAdded();
+        await addAiItemsBatch([it]);
       }
 
       function initAiPanel(opts) {
@@ -802,18 +833,28 @@
         addSelectedBtn && addSelectedBtn.addEventListener("click", async () => {
           const selected = pending.filter((x) => x.picked && !x.added);
           if (!selected.length) return;
-          for (const it of selected) {
-            try {
-              // eslint-disable-next-line no-await-in-loop
-              await addAiItem(it);
-              it.added = true;
-            } catch (err) {
-              toast((err && err.message) ? err.message : `加入失败：${it.name}`, "danger");
-              break;
-            }
+          const named = selected.filter((x) => (x.name || "").trim());
+          if (!named.length) {
+            toast("已勾选项中没有有效名称，无法入库", "warning");
+            return;
           }
-          render();
-          toast("已加入已勾选项目", "success");
+          addSelectedBtn.disabled = true;
+          try {
+            await addAiItemsBatch(named);
+            named.forEach((it) => { it.added = true; });
+            render();
+            const skipped = selected.length - named.length;
+            toast(
+              skipped > 0
+                ? `已批量加入 ${named.length} 项（已跳过 ${skipped} 条无名称）`
+                : `已批量加入 ${named.length} 项`,
+              "success"
+            );
+          } catch (err) {
+            toast((err && err.message) ? err.message : "批量加入失败，请稍后重试", "danger");
+          } finally {
+            addSelectedBtn.disabled = false;
+          }
         });
 
         clearBtn && clearBtn.addEventListener("click", () => {

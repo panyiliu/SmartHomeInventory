@@ -193,12 +193,11 @@ def api_ai_parse_text():
         return jsonify({"ok": False, "error": "当前AI识别服务异常，请稍后重试或手动添加食材"}), 500
 
 
-@bp.post("/api/items/add-one")
-def api_items_add_one():
-    payload = request.get_json(silent=True) or {}
+def _item_from_add_payload(payload: dict) -> Item | None:
+    """由 add-one / add-batch 共用；名称为空返回 None。"""
     name = (payload.get("name") or "").strip()
     if not name:
-        return jsonify({"ok": False, "error": "名称不能为空"}), 400
+        return None
     quantity = safe_int(payload.get("quantity"), default=1)
     if quantity < 0:
         quantity = 0
@@ -222,7 +221,57 @@ def api_items_add_one():
         shelf_life_days=shelf_life_days_int,
     )
     item.touch()
+    return item
+
+
+@bp.post("/api/items/add-one")
+def api_items_add_one():
+    payload = request.get_json(silent=True) or {}
+    item = _item_from_add_payload(payload)
+    if item is None:
+        return jsonify({"ok": False, "error": "名称不能为空"}), 400
     db.session.add(item)
     db.session.commit()
     return jsonify({"ok": True, "item_id": item.id})
+
+
+@bp.post("/api/items/add-batch")
+def api_items_add_batch():
+    """一次请求批量入库（单事务），供「加入已勾选」等场景。"""
+    payload = request.get_json(silent=True) or {}
+    raw_list = payload.get("items")
+    if not isinstance(raw_list, list) or len(raw_list) == 0:
+        return jsonify({"ok": False, "error": "items 必须为非空数组"}), 400
+    if len(raw_list) > 200:
+        return jsonify({"ok": False, "error": "单次最多添加 200 条"}), 400
+
+    created: list[dict] = []
+    try:
+        for i, row in enumerate(raw_list):
+            if not isinstance(row, dict):
+                db.session.rollback()
+                return jsonify({"ok": False, "error": f"第 {i + 1} 条格式无效"}), 400
+            item = _item_from_add_payload(row)
+            if item is None:
+                db.session.rollback()
+                return jsonify({"ok": False, "error": f"第 {i + 1} 条名称不能为空"}), 400
+            db.session.add(item)
+            db.session.flush()
+            created.append(
+                {
+                    "item_id": item.id,
+                    "name": item.name,
+                    "quantity": int(item.quantity) if float(item.quantity).is_integer() else float(item.quantity),
+                    "unit": item.unit,
+                    "category": item.category,
+                    "location": item.location,
+                }
+            )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        print("[items] add-batch failed")
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": "批量入库失败，请稍后再试"}), 500
+    return jsonify({"ok": True, "items": created, "count": len(created)})
 
