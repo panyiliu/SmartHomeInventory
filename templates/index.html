@@ -291,6 +291,15 @@
                             <i class="bi bi-trash"></i>
                           </button>
                         </form>
+                        <button class="btn btn-outline-danger tap-btn mini-action-btn"
+                                type="button"
+                                aria-label="删除"
+                                title="删除"
+                                data-inv-quick-delete
+                                data-delete-url="{{ url_for('items.delete', item_id=item.id) }}"
+                                data-restore-url="{{ url_for('items.restore', item_id=item.id) }}">
+                          <i class="bi bi-trash-fill"></i>
+                        </button>
                       {% endif %}
 
                       <div class="batch-only form-check mb-0">
