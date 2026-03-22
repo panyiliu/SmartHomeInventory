@@ -278,19 +278,6 @@
                     <span class="small text-secondary fw-semibold text-nowrap inv-mobile-card-stored">已存放 {{ stored }} 天</span>
                     <div class="d-flex align-items-center gap-2">
                       {% if view not in ['usedup','trash'] %}
-                        <form method="post"
-                              action="{{ url_for('items.use_up_route', item_id=item.id) }}"
-                              data-use-up
-                              data-qty="{{ item.quantity }}"
-                              data-step="1.0"
-                              onsubmit="return window.fridgeUseUpConfirm(event);">
-                          <button class="btn btn-outline-primary tap-btn mini-action-btn"
-                                  type="submit"
-                                  aria-label="用完"
-                                  title="用完">
-                            <i class="bi bi-trash"></i>
-                          </button>
-                        </form>
                         <button class="btn btn-outline-danger tap-btn mini-action-btn"
                                 type="button"
                                 aria-label="删除"
