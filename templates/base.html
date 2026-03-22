@@ -261,7 +261,7 @@
         padding-bottom: .45rem;
       }
 
-      /* Batch select toggle (hide batch UI by default) */
+      /* Batch select toggle：默认隐藏批量 UI。body 须默认带 .batch-off，避免首屏 JS 运行前复选框闪现 */
       .batch-off .batch-only{ display: none !important; }
       .tap-btn { min-width: 44px; min-height: 44px; }
       .action-btn i { font-size: 0.95rem; }
@@ -637,7 +637,7 @@
       }
     </style>
   </head>
-  <body>
+  <body class="batch-off">
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
       <div class="container py-2">
         <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
