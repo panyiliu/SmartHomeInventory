@@ -8,7 +8,7 @@ from flask import Blueprint, abort, flash, g, jsonify, redirect, request, url_fo
 from ...extensions import db
 from ...models import Item
 from ...services.items_service import mark_used_up, use_up
-from ...utils.auth import admin_required
+from ...utils.auth import admin_required, login_required
 
 
 bp = Blueprint("items", __name__)
@@ -87,12 +87,23 @@ def mark_used_up_route(item_id: int):
     return redirect(request.referrer or url_for("main.index", view="usedup"))
 
 
+def _wants_json_response() -> bool:
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.accept_mimetypes.best == "application/json"
+    )
+
+
 @bp.post("/item/<int:item_id>/delete")
 def delete(item_id: int):
     item = Item.query.get_or_404(item_id)
     item.deleted_at = datetime.utcnow()
     item.touch()
     db.session.commit()
+
+    if _wants_json_response():
+        return jsonify({"ok": True, "item_id": item.id, "name": item.name})
+
     flash(f"已移入回收站：{item.name}", "warning")
 
     ref = request.referrer
@@ -108,12 +119,16 @@ def delete(item_id: int):
 
 
 @bp.post("/item/<int:item_id>/restore")
-@admin_required
+@login_required
 def restore(item_id: int):
     item = Item.query.get_or_404(item_id)
     item.deleted_at = None
     item.touch()
     db.session.commit()
+
+    if _wants_json_response():
+        return jsonify({"ok": True, "item_id": item.id, "name": item.name})
+
     flash(f"已恢复：{item.name}", "success")
     return redirect(request.referrer or url_for("main.index", view="trash"))
 

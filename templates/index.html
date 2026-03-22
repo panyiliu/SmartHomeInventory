@@ -14,6 +14,7 @@
   </div>
 
   <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastArea"></div>
+  <div id="invUndoSnackbarHost" aria-live="polite" aria-atomic="true"></div>
 
   <!-- Mobile search is now in navbar modal; legacy block removed -->
 
@@ -313,11 +314,14 @@
                           </button>
                         </form>
                       {% else %}
-                        <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认移入回收站：{{ item.name }}？');">
-                          <button class="btn btn-outline-danger tap-btn mini-action-btn" type="submit" aria-label="删除">
-                            <i class="bi bi-trash"></i>
-                          </button>
-                        </form>
+                        <button class="btn btn-outline-danger tap-btn mini-action-btn"
+                                type="button"
+                                aria-label="删除"
+                                data-inv-quick-delete
+                                data-delete-url="{{ url_for('items.delete', item_id=item.id) }}"
+                                data-restore-url="{{ url_for('items.restore', item_id=item.id) }}">
+                          <i class="bi bi-trash"></i>
+                        </button>
                       {% endif %}
                   </div>
                   {% endif %}
@@ -402,9 +406,11 @@
                           <button class="btn btn-sm btn-outline-danger" type="submit">硬删除</button>
                         </form>
                       {% else %}
-                        <form method="post" action="{{ url_for('items.delete', item_id=item.id) }}" onsubmit="return confirm('确认移入回收站：{{ item.name }}？');">
-                          <button class="btn btn-sm btn-danger" type="submit">删除</button>
-                        </form>
+                        <button class="btn btn-sm btn-danger"
+                                type="button"
+                                data-inv-quick-delete
+                                data-delete-url="{{ url_for('items.delete', item_id=item.id) }}"
+                                data-restore-url="{{ url_for('items.restore', item_id=item.id) }}">删除</button>
                       {% endif %}
                     </div>
                   </td>
@@ -465,6 +471,76 @@
   </div>
 
   <style>
+    /* 单条删除：离场 / 入场（与撤销恢复对称） */
+    .inv-delete-leave {
+      transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .inv-delete-leave.is-leaving {
+      opacity: 0;
+      transform: translateX(-12px) scale(0.99);
+    }
+    .inv-delete-enter {
+      opacity: 0;
+      transform: translateX(-12px) scale(0.99);
+    }
+    .inv-delete-enter.is-entering {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #invUndoSnackbarHost {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      z-index: 1085;
+      pointer-events: none;
+      width: min(100%, 420px);
+      padding: 0 12px 20px;
+    }
+    .inv-undo-snackbar {
+      pointer-events: auto;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: rgba(30, 43, 44, 0.92);
+      color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0, 20, 0, 0.22);
+      padding: 10px 12px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .inv-undo-snackbar.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .inv-undo-snackbar .inv-undo-msg {
+      flex: 1;
+      align-self: center;
+      font-size: 0.9375rem;
+      line-height: 1.35;
+    }
+    .inv-undo-snackbar .inv-undo-btn {
+      flex-shrink: 0;
+      border: 0;
+      background: transparent;
+      color: #a8e6a9;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .inv-undo-snackbar .inv-undo-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #c8f5c9;
+    }
+    @media (min-width: 768px) {
+      #invUndoSnackbarHost {
+        bottom: 8px;
+      }
+    }
     #btnScrollTop{
       position: fixed;
       right: 16px;
@@ -1152,6 +1228,179 @@
       if (btnTrashHardClear) {
         btnTrashHardClear.addEventListener("click", () => hardClearTrashQuick());
       }
+
+      // 单条软删除：无确认、动画移除、底部 Snackbar 撤销（5 秒内）
+      (function invQuickDelete() {
+        if (CURRENT_VIEW === "trash") return;
+
+        let pending = null;
+        const host = document.getElementById("invUndoSnackbarHost");
+
+        function initRemainBars(root) {
+          if (!root) return;
+          root.querySelectorAll(".remain-bar > span[data-pct]").forEach((el) => {
+            const raw = el.getAttribute("data-pct");
+            const pct = Math.max(0, Math.min(100, Number(raw || "0")));
+            el.style.width = pct + "%";
+          });
+        }
+
+        function bumpInvCount(delta) {
+          const cnt = document.getElementById("invCount");
+          if (!cnt) return;
+          const n = parseInt(String(cnt.textContent || "0"), 10);
+          if (Number.isNaN(n)) return;
+          cnt.textContent = String(Math.max(0, n + delta));
+        }
+
+        function hideSnackbar(el) {
+          if (!el || !el.parentNode) return;
+          el.classList.remove("is-visible");
+          window.setTimeout(() => {
+            try {
+              el.remove();
+            } catch (e) {}
+          }, 350);
+        }
+
+        function clearPending() {
+          if (!pending) return;
+          if (pending.timer) window.clearTimeout(pending.timer);
+          if (pending.snackEl) hideSnackbar(pending.snackEl);
+          pending = null;
+        }
+
+        function showUndoSnackbar(onUndo) {
+          if (!host) {
+            showToast("项目已删除", "dark");
+            return { el: null, timer: null };
+          }
+          const el = document.createElement("div");
+          el.className = "inv-undo-snackbar";
+          el.innerHTML =
+            '<div class="inv-undo-msg">项目已删除</div><button type="button" class="inv-undo-btn">撤销</button>';
+          host.appendChild(el);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => el.classList.add("is-visible"));
+          });
+          const undoBtn = el.querySelector(".inv-undo-btn");
+          const timer = window.setTimeout(() => {
+            hideSnackbar(el);
+            if (pending && pending.snackEl === el) pending = null;
+          }, 5000);
+          undoBtn.addEventListener("click", () => {
+            if (pending && pending.timer) window.clearTimeout(pending.timer);
+            const run = onUndo;
+            pending = null;
+            hideSnackbar(el);
+            run();
+          });
+          return { el, timer };
+        }
+
+        function findItemRowEl(btn) {
+          const tr = btn.closest("tr[data-item-row]");
+          if (tr) return tr;
+          return btn.closest(".inv-mobile-card[data-item-row]");
+        }
+
+        document.addEventListener("click", (e) => {
+          const btn = e.target && e.target.closest && e.target.closest("[data-inv-quick-delete]");
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();
+
+          clearPending();
+
+          const deleteUrl = btn.getAttribute("data-delete-url") || "";
+          const restoreUrl = btn.getAttribute("data-restore-url") || "";
+          if (!deleteUrl || !restoreUrl) return;
+
+          const row = findItemRowEl(btn);
+          if (!row) return;
+
+          const parent = row.parentNode;
+          const nextSibling = row.nextSibling;
+          const snapshot = row.cloneNode(true);
+
+          row.classList.add("inv-delete-leave");
+          requestAnimationFrame(() => row.classList.add("is-leaving"));
+
+          window.setTimeout(() => {
+            if (!row.parentNode) return;
+            row.remove();
+            bumpInvCount(-1);
+            syncCheckboxes();
+
+            fetch(deleteUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+                Accept: "application/json",
+              },
+              body: "{}",
+            })
+              .then(async (resp) => {
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data || !data.ok) {
+                  const msg =
+                    (data && (data.error || data.message)) ||
+                    (resp.status === 400 ? "请求被拒绝，请刷新后重试。" : "删除失败，请重试。");
+                  parent.insertBefore(row, nextSibling);
+                  row.classList.remove("inv-delete-leave", "is-leaving");
+                  bumpInvCount(1);
+                  syncCheckboxes();
+                  initRemainBars(row);
+                  showToast(msg, "danger");
+                  return;
+                }
+
+                const runUndo = () => {
+                  fetch(restoreUrl, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "X-Requested-With": "XMLHttpRequest",
+                      Accept: "application/json",
+                    },
+                    body: "{}",
+                  })
+                    .then(async (r2) => {
+                      const d2 = await r2.json().catch(() => ({}));
+                      if (!r2.ok || !d2 || !d2.ok) {
+                        showToast((d2 && (d2.error || d2.message)) || "恢复失败，请刷新页面。", "danger");
+                        return;
+                      }
+                      parent.insertBefore(snapshot, nextSibling);
+                      snapshot.classList.add("inv-delete-enter");
+                      requestAnimationFrame(() => snapshot.classList.add("is-entering"));
+                      window.setTimeout(() => {
+                        snapshot.classList.remove("inv-delete-enter", "is-entering");
+                      }, 240);
+                      bumpInvCount(1);
+                      syncCheckboxes();
+                      initRemainBars(snapshot);
+                    })
+                    .catch(() => {
+                      showToast("恢复失败（网络异常）", "danger");
+                    });
+                };
+
+                const snack = showUndoSnackbar(runUndo);
+                if (snack.el) pending = { timer: snack.timer, snackEl: snack.el };
+              })
+              .catch(() => {
+                parent.insertBefore(row, nextSibling);
+                row.classList.remove("inv-delete-leave", "is-leaving");
+                bumpInvCount(1);
+                syncCheckboxes();
+                initRemainBars(row);
+                showToast("删除失败（网络异常）", "danger");
+              });
+          }, 200);
+        });
+      })();
 
       // 初始同步一次，确保刷新后批量栏状态正确
       setBatchMode(false);
